@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8000
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: world_cup_predictor
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env before running docker compose}
+      FOOTBALL_DATA_TOKEN: ${FOOTBALL_DATA_TOKEN:-}
+    depends_on:
+      mongo:
+        condition: service_started
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

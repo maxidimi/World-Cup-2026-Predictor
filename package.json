@@ -1,0 +1,13 @@
+{
+  "name": "world-cup-predictor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local World Cup prediction app with MongoDB-backed auth.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.16.0"
+  }
+}

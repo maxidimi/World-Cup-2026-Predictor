@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin - World Cup Predictor</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="admin-header">
+      <nav class="topbar" aria-label="Admin">
+        <a class="brand brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </a>
+        <div class="session">
+          <a class="nav-link" href="index.html">Prediction app</a>
+          <button id="refreshBtn" class="ghost" type="button">Refresh</button>
+        </div>
+      </nav>
+      <section class="admin-title">
+        <p class="eyebrow">Admin console</p>
+        <h1>Prediction control room</h1>
+        <p class="lede">Review every user's picks, compare vote stats by match, and edit predictions directly.</p>
+      </section>
+    </header>
+
+    <main class="admin-main">
+      <section class="summary admin-summary" aria-label="Admin summary">
+        <div>
+          <strong id="userCount">0</strong>
+          <span>registered users</span>
+        </div>
+        <div>
+          <strong id="predictionCount">0</strong>
+          <span>total predictions</span>
+        </div>
+        <div>
+          <strong id="votedMatchCount">0</strong>
+          <span>matches with votes</span>
+        </div>
+      </section>
+
+      <section class="controls admin-controls" aria-label="Admin filters">
+        <div class="admin-menu" role="tablist" aria-label="Admin pages">
+          <button class="admin-tab active" data-view="users" type="button">Users</button>
+          <button class="admin-tab" data-view="predictions" type="button">Predictions</button>
+          <button class="admin-tab" data-view="stats" type="button">Game stats</button>
+          <button class="admin-tab" data-view="results" type="button">Results</button>
+        </div>
+        <div class="control-fields">
+          <label>
+            <span>Search users or matches</span>
+            <input id="adminSearch" placeholder="Email, team, match id, phase">
+          </label>
+          <label>
+            <span>Phase</span>
+            <select id="adminPhase">
+              <option value="all">All phases</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <p id="adminMessage" class="form-message admin-message" role="status"></p>
+
+      <section id="usersPanel" class="admin-panel">
+        <div class="panel-title">
+          <h2>All Users</h2>
+          <span id="usersPanelCount">0 users</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Predictions</th>
+                <th>Exact score</th>
+                <th>Result 1/x/2</th>
+                <th>Open</th>
+              </tr>
+            </thead>
+            <tbody id="userRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="userDetailPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2 id="userDetailTitle">User Predictions</h2>
+          <button id="closeUserDetail" class="ghost" type="button">Close</button>
+        </div>
+        <div id="userDetailStats" class="user-detail-stats"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Match</th>
+                <th>Prediction</th>
+                <th>Result</th>
+                <th>Exact</th>
+                <th>1/x/2</th>
+              </tr>
+            </thead>
+            <tbody id="userPredictionRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="predictionPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2>All User Predictions</h2>
+          <span id="predictionPanelCount">0 rows</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Match</th>
+                <th>Prediction</th>
+                <th>Updated</th>
+                <th>Edit</th>
+              </tr>
+            </thead>
+            <tbody id="predictionRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="statsPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2>Voting Stats By Game</h2>
+          <span id="statsPanelCount">0 matches</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Match</th>
+                <th>Votes</th>
+                <th>Outcomes</th>
+                <th>Average Score</th>
+              </tr>
+            </thead>
+            <tbody id="statsRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="resultsPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2>Actual Results</h2>
+          <div class="panel-actions">
+            <span id="resultsPanelCount">0 matches</span>
+            <button id="syncResultsBtn" class="ghost" type="button">Sync API scores</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Match</th>
+                <th>Current result</th>
+                <th>Edit actual score</th>
+              </tr>
+            </thead>
+            <tbody id="resultRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+.git
+.env
+node_modules
+npm-debug.log
+Dockerfile
+compose.yaml
+*.md
+.agents
+.codex
+x.py

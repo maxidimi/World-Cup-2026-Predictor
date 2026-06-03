@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>World Cup Predictor</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="topbar" aria-label="Primary">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </div>
+        <div class="session">
+          <span id="sessionName" class="session-name">Guest mode</span>
+          <button id="logoutBtn" class="ghost hidden" type="button">Log out</button>
+        </div>
+      </nav>
+      <section class="hero-content">
+        <p class="eyebrow">2026 fixture board</p>
+        <h1>Predict every World Cup match from groups to final.</h1>
+        <p class="lede">Register locally, log in, browse by team, date, or phase, and save score predictions to MongoDB.</p>
+      </section>
+    </header>
+
+    <main>
+      <section class="auth-panel" aria-label="Account">
+        <form id="authForm" class="auth-form" novalidate>
+          <div class="auth-copy">
+            <h2 id="authTitle">Create your predictor profile</h2>
+            <p id="authHint">Accounts and picks are stored in local MongoDB.</p>
+          </div>
+          <label>
+            <span>Name</span>
+            <input id="nameInput" name="name" autocomplete="name" aria-describedby="nameError" required>
+            <span id="nameError" class="field-error" aria-live="polite"></span>
+          </label>
+          <label>
+            <span>Email</span>
+            <input id="emailInput" name="email" type="email" autocomplete="email" spellcheck="false" aria-describedby="emailError" required>
+            <span id="emailError" class="field-error" aria-live="polite"></span>
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="passwordInput" name="password" type="password" autocomplete="current-password" minlength="8" aria-describedby="passwordError" required>
+            <span id="passwordError" class="field-error" aria-live="polite"></span>
+          </label>
+          <div class="auth-actions">
+            <button id="authSubmit" type="submit">Register</button>
+            <button id="toggleAuth" class="ghost" type="button">I already have an account</button>
+            <a class="button-link ghost-link" href="forgot-password.html">Forgot password?</a>
+          </div>
+          <p id="authMessage" class="form-message" role="status"></p>
+        </form>
+      </section>
+
+      <section class="controls" aria-label="Match filters">
+        <div class="segmented" role="group" aria-label="Group matches by">
+          <button class="segment active" data-group="date" type="button">By date</button>
+          <button class="segment" data-group="team" type="button">By team</button>
+          <button class="segment" data-group="phase" type="button">By phase</button>
+        </div>
+        <div class="control-fields">
+          <label>
+            <span>Search</span>
+            <input id="searchInput" placeholder="Team, stadium, city, phase">
+          </label>
+          <label>
+            <span>Phase</span>
+            <select id="phaseFilter">
+              <option value="all">All phases</option>
+            </select>
+          </label>
+          <label>
+            <span>Team</span>
+            <select id="teamFilter">
+              <option value="all">All teams</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="summary" aria-label="Prediction summary">
+        <div>
+          <strong id="matchCount">104</strong>
+          <span>matches</span>
+        </div>
+        <div>
+          <strong id="savedCount">0</strong>
+          <span>saved predictions</span>
+        </div>
+        <div>
+          <strong id="activeView">By date</strong>
+          <span>active view</span>
+        </div>
+      </section>
+
+      <section id="matches" class="matches" aria-live="polite"></section>
+    </main>
+
+    <template id="matchTemplate">
+      <article class="match-card">
+        <div class="match-meta">
+          <span class="badge phase"></span>
+          <span class="date"></span>
+        </div>
+        <div class="teams">
+          <strong class="home"></strong>
+          <span>vs</span>
+          <strong class="away"></strong>
+        </div>
+        <p class="venue"></p>
+        <form class="prediction" aria-label="Prediction">
+          <label>
+            <span class="home-label"></span>
+            <input class="home-score" type="number" inputmode="numeric" min="0" max="30" placeholder="0">
+          </label>
+          <label>
+            <span class="away-label"></span>
+            <input class="away-score" type="number" inputmode="numeric" min="0" max="30" placeholder="0">
+          </label>
+          <button type="submit">Save</button>
+        </form>
+        <p class="prediction-state"></p>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>

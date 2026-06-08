@@ -107,7 +107,7 @@ Then set the admin flag:
 
 ```javascript
 db.users.updateOne(
-  { email: "dimitris.dimochronis@gmail.com" },
+  { email: "admin@domain.com" },
   { $set: { isAdmin: true } }
 )
 ```

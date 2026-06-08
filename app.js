@@ -1159,7 +1159,6 @@ let matches = rawMatches.map((item, index) => ({
 }));
 
 const state = {
-  authMode: "register",
   currentUser: null,
   token: localStorage.getItem("wc_auth_token") || "",
   predictions: {},
@@ -1172,68 +1171,8 @@ const state = {
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
 const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-const dateFormatter = new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const kickoffDateFormatter = new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const kickoffTimeFormatter = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
-
-const emailPattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
-
-function isCompatibleEmail(email) {
-  if (email.length > 254 || /\s/.test(email)) return false;
-  const [local, domain] = email.split("@");
-  if (!local || !domain || local.length > 64 || local.startsWith(".") || local.endsWith(".") || local.includes("..")) {
-    return false;
-  }
-  return emailPattern.test(email);
-}
-
-function setFieldError(input, errorElement, message) {
-  input.classList.toggle("invalid", Boolean(message));
-  input.setAttribute("aria-invalid", message ? "true" : "false");
-  errorElement.textContent = message;
-}
-
-function validateAuthFields({ showErrors = true, requireFields = true } = {}) {
-  const nameInput = $("#nameInput");
-  const emailInput = $("#emailInput");
-  const passwordInput = $("#passwordInput");
-  const name = nameInput.value.trim();
-  const email = emailInput.value.trim();
-  const password = passwordInput.value;
-  const errors = {
-    name: "",
-    email: "",
-    password: ""
-  };
-
-  if (requireFields && state.authMode === "register" && !name) {
-    errors.name = "Name is required.";
-  }
-  if (requireFields && !email) {
-    errors.email = "Email is required.";
-  } else if (email && !isCompatibleEmail(email)) {
-    errors.email = "Use a compatible email address, like name@example.com.";
-  }
-  if (requireFields && !password) {
-    errors.password = "Password is required.";
-  } else if (password && password.length < 8) {
-    errors.password = "Password must be at least 8 characters.";
-  }
-
-  if (showErrors) {
-    setFieldError(nameInput, $("#nameError"), errors.name);
-    setFieldError(emailInput, $("#emailError"), errors.email);
-    setFieldError(passwordInput, $("#passwordError"), errors.password);
-  }
-
-  return !errors.name && !errors.email && !errors.password;
-}
-
-function clearAuthErrors() {
-  setFieldError($("#nameInput"), $("#nameError"), "");
-  setFieldError($("#emailInput"), $("#emailError"), "");
-  setFieldError($("#passwordInput"), $("#passwordError"), "");
-}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -1260,10 +1199,6 @@ async function loadMatches() {
   }
 }
 
-function formatDate(value) {
-  return dateFormatter.format(new Date(`${value}T12:00:00`));
-}
-
 function kickoffDate(match) {
   return kickoffDateFormatter.format(new Date(match.kickoffUtc));
 }
@@ -1273,7 +1208,7 @@ function kickoffTime(match) {
 }
 
 function kickoffLabel(match) {
-  return `${kickoffDate(match)} · ${kickoffTime(match)} (${userTimeZone})`;
+  return `${kickoffDate(match)} - ${kickoffTime(match)} (${userTimeZone})`;
 }
 
 function hasMatchStarted(match) {
@@ -1328,6 +1263,16 @@ function groupMatches(items) {
   return groups;
 }
 
+function clearFilters() {
+  state.search = "";
+  state.phase = "all";
+  state.team = "all";
+  $("#searchInput").value = "";
+  $("#phaseFilter").value = "all";
+  $("#teamFilter").value = "all";
+  renderMatches();
+}
+
 function renderMatches() {
   const container = $("#matches");
   const predictions = state.predictions;
@@ -1342,7 +1287,16 @@ function renderMatches() {
   if (!items.length) {
     const empty = document.createElement("section");
     empty.className = "group";
-    empty.innerHTML = `<div class="group-header"><h2>No matches found</h2><span>Try another filter</span></div>`;
+    const header = document.createElement("div");
+    header.className = "group-header";
+    header.innerHTML = "<h2>No matches found</h2>";
+    const clearButton = document.createElement("button");
+    clearButton.className = "ghost";
+    clearButton.type = "button";
+    clearButton.textContent = "Clear filters";
+    clearButton.addEventListener("click", clearFilters);
+    header.append(clearButton);
+    empty.append(header);
     container.append(empty);
     return;
   }
@@ -1363,11 +1317,16 @@ function renderMatches() {
 
 function renderCard(match, prediction) {
   const node = $("#matchTemplate").content.firstElementChild.cloneNode(true);
-  $(".phase", node).textContent = `${match.id} · ${match.phase}`;
+  $(".phase", node).textContent = `${match.id} - ${match.phase}`;
   $(".date", node).textContent = kickoffLabel(match);
   $(".home", node).textContent = match.home;
   $(".away", node).textContent = match.away;
-  $(".venue", node).textContent = `${match.stadium}, ${match.city} · stadium local ${formatDate(match.date)} ${match.kickoffLocal}`;
+  const venueParts = [match.stadium, match.city]
+    .map((value) => String(value || "").trim())
+    .filter((value) => value && value.toUpperCase() !== "TBD");
+  const venue = $(".venue", node);
+  venue.textContent = [...new Set(venueParts)].join(", ");
+  venue.classList.toggle("hidden", !venue.textContent);
   $(".home-label", node).textContent = match.home;
   $(".away-label", node).textContent = match.away;
 
@@ -1434,67 +1393,11 @@ function renderAuth() {
   const loggedIn = Boolean(state.currentUser);
   const user = state.currentUser;
   $("#sessionName").textContent = loggedIn ? `Signed in as ${user.name || user.email}` : "";
+  $("#guestActions").classList.toggle("hidden", loggedIn);
   $("#logoutBtn").classList.toggle("hidden", !loggedIn);
-  $(".auth-panel").classList.toggle("hidden", loggedIn);
-  $("#authTitle").textContent = state.authMode === "register" ? "Create your predictor profile" : "Log in to continue";
-  $("#authHint").textContent = loggedIn ? "Switch accounts any time from this panel." : "Accounts and picks are stored in local MongoDB.";
-  $("#authSubmit").textContent = state.authMode === "register" ? "Register" : "Log in";
-  $("#toggleAuth").textContent = state.authMode === "register" ? "I already have an account" : "Create a new account";
-  $("#nameInput").parentElement.classList.toggle("hidden", state.authMode === "login");
-  $("#nameInput").required = state.authMode === "register";
-  clearAuthErrors();
-}
-
-async function handleAuth(event) {
-  event.preventDefault();
-  const email = $("#emailInput").value.trim().toLowerCase();
-  const password = $("#passwordInput").value;
-  const name = $("#nameInput").value.trim();
-  const message = $("#authMessage");
-
-  if (!validateAuthFields({ showErrors: true, requireFields: true })) {
-    message.textContent = "Please fix the highlighted fields.";
-    return;
-  }
-
-  $("#authSubmit").disabled = true;
-  message.textContent = "Working...";
-
-  try {
-    const payload = state.authMode === "register" ? { name, email, password } : { email, password };
-    const data = await api(state.authMode === "register" ? "/api/register" : "/api/login", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
-    state.currentUser = data.user;
-    state.token = data.token;
-    localStorage.setItem("wc_auth_token", data.token);
-    await loadPredictions();
-    message.textContent = state.authMode === "register" ? "Registered and signed in." : "Logged in.";
-    $("#authForm").reset();
-    renderAuth();
-    renderMatches();
-  } catch (error) {
-    message.textContent = error.message;
-  } finally {
-    $("#authSubmit").disabled = false;
-  }
 }
 
 function bindEvents() {
-  $("#authForm").addEventListener("submit", handleAuth);
-  ["nameInput", "emailInput", "passwordInput"].forEach((id) => {
-    $(`#${id}`).addEventListener("input", () => {
-      validateAuthFields({ showErrors: true, requireFields: false });
-      $("#authMessage").textContent = "";
-    });
-    $(`#${id}`).addEventListener("blur", () => validateAuthFields({ showErrors: true, requireFields: false }));
-  });
-  $("#toggleAuth").addEventListener("click", () => {
-    state.authMode = state.authMode === "register" ? "login" : "register";
-    $("#authMessage").textContent = "";
-    renderAuth();
-  });
   $("#logoutBtn").addEventListener("click", () => {
     state.currentUser = null;
     state.token = "";
@@ -1522,6 +1425,7 @@ function bindEvents() {
     state.team = event.target.value;
     renderMatches();
   });
+  $("#clearFiltersBtn").addEventListener("click", clearFilters);
 }
 
 async function restoreSession() {

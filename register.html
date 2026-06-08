@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Register - World Cup Predictor</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="auth-page" data-auth-mode="register">
+    <header class="auth-header">
+      <a class="brand brand-link" href="index.html">
+        <span class="brand-mark" aria-hidden="true">WC</span>
+        <span>World Cup Predictor</span>
+      </a>
+    </header>
+    <main class="auth-shell">
+      <section class="auth-card" aria-labelledby="authTitle">
+        <div class="auth-copy">
+          <p class="eyebrow">World Cup 2026</p>
+          <h1 id="authTitle">Create an account</h1>
+          <p>Save predictions and track your results.</p>
+        </div>
+        <form id="authForm" class="auth-page-form" novalidate>
+          <label>
+            <span>Name</span>
+            <input id="nameInput" name="name" autocomplete="name" aria-describedby="nameError">
+            <span id="nameError" class="field-error" aria-live="polite"></span>
+          </label>
+          <label>
+            <span>Email</span>
+            <input id="emailInput" name="email" type="email" autocomplete="email" spellcheck="false" aria-describedby="emailError">
+            <span id="emailError" class="field-error" aria-live="polite"></span>
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="passwordInput" name="password" type="password" autocomplete="new-password" aria-describedby="passwordError">
+            <span id="passwordError" class="field-error" aria-live="polite"></span>
+          </label>
+          <button id="authSubmit" type="submit">Register</button>
+          <p id="authMessage" class="form-message" role="status"></p>
+        </form>
+        <div class="auth-links">
+          <span>Already registered? <a href="login.html">Log in</a></span>
+        </div>
+      </section>
+    </main>
+    <script src="auth.js"></script>
+  </body>
+</html>

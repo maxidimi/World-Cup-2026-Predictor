@@ -1211,6 +1211,12 @@ function kickoffLabel(match) {
   return `${kickoffDate(match)} - ${kickoffTime(match)} (${userTimeZone})`;
 }
 
+function displayPhase(value) {
+  const phase = String(value || "").trim();
+  const group = phase.match(/GROUP_([A-Z])$/i);
+  return group ? `GROUP ${group[1].toUpperCase()}` : phase.replace(/_/g, " ");
+}
+
 function hasMatchStarted(match) {
   return Date.now() >= new Date(match.kickoffUtc).getTime();
 }
@@ -1221,7 +1227,7 @@ function fillSelects() {
   phaseSelect.replaceChildren(new Option("All phases", "all"));
   teamSelect.replaceChildren(new Option("All teams", "all"));
   [...new Set(matches.map((match) => match.phase))].forEach((phase) => {
-    phaseSelect.append(new Option(phase, phase));
+    phaseSelect.append(new Option(displayPhase(phase), phase));
   });
 
   const realTeams = [...new Set(matches.flatMap((match) => [match.home, match.away]))]
@@ -1251,7 +1257,7 @@ function groupMatches(items) {
       keys = [match.home, match.away].filter((team) => !/^(Winner|Runner-up|Loser|3rd)/.test(team));
       if (!keys.length) keys = ["Knockout placeholders"];
     } else if (state.groupBy === "phase") {
-      keys = [match.phase];
+      keys = [displayPhase(match.phase)];
     } else {
       keys = [kickoffDate(match)];
     }
@@ -1317,7 +1323,7 @@ function renderMatches() {
 
 function renderCard(match, prediction) {
   const node = $("#matchTemplate").content.firstElementChild.cloneNode(true);
-  $(".phase", node).textContent = `${match.id} - ${match.phase}`;
+  $(".phase", node).textContent = displayPhase(match.phase);
   $(".date", node).textContent = kickoffLabel(match);
   $(".home", node).textContent = match.home;
   $(".away", node).textContent = match.away;
@@ -1327,11 +1333,11 @@ function renderCard(match, prediction) {
   const venue = $(".venue", node);
   venue.textContent = [...new Set(venueParts)].join(", ");
   venue.classList.toggle("hidden", !venue.textContent);
-  $(".home-label", node).textContent = match.home;
-  $(".away-label", node).textContent = match.away;
 
   const homeScore = $(".home-score", node);
   const awayScore = $(".away-score", node);
+  homeScore.setAttribute("aria-label", `${match.home} predicted score`);
+  awayScore.setAttribute("aria-label", `${match.away} predicted score`);
   const stateLine = $(".prediction-state", node);
   const form = $(".prediction", node);
   const saveButton = $("button", form);
@@ -1451,11 +1457,11 @@ async function loadPredictions() {
 }
 
 async function init() {
-  await loadMatches();
-  fillSelects();
   bindEvents();
   await restoreSession();
   renderAuth();
+  await loadMatches();
+  fillSelects();
   renderMatches();
 }
 

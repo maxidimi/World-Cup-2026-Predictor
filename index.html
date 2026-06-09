@@ -16,7 +16,7 @@
         </div>
         <div class="session">
           <span id="sessionName" class="session-name"></span>
-          <div id="guestActions" class="session-actions">
+          <div id="guestActions" class="session-actions hidden">
             <a class="text-link" href="login.html">Log in</a>
             <a class="button-link compact-button" href="register.html">Register</a>
           </div>
@@ -85,27 +85,17 @@
           <span class="badge phase"></span>
           <span class="date"></span>
         </div>
-        <div class="match-main">
-          <div class="fixture">
-            <div class="teams">
-              <strong class="home"></strong>
-              <span>vs</span>
-              <strong class="away"></strong>
-            </div>
-            <p class="venue"></p>
+        <form class="prediction" aria-label="Prediction">
+          <div class="scoreboard">
+            <strong class="home"></strong>
+            <input class="home-score" type="number" inputmode="numeric" min="0" max="30" placeholder="0" aria-label="Home score">
+            <span aria-hidden="true">:</span>
+            <input class="away-score" type="number" inputmode="numeric" min="0" max="30" placeholder="0" aria-label="Away score">
+            <strong class="away"></strong>
           </div>
-          <form class="prediction" aria-label="Prediction">
-            <label>
-              <span class="home-label"></span>
-              <input class="home-score" type="number" inputmode="numeric" min="0" max="30" placeholder="0">
-            </label>
-            <label>
-              <span class="away-label"></span>
-              <input class="away-score" type="number" inputmode="numeric" min="0" max="30" placeholder="0">
-            </label>
-            <button type="submit">Save</button>
-          </form>
-        </div>
+          <p class="venue"></p>
+          <button type="submit">Save</button>
+        </form>
         <p class="prediction-state"></p>
       </article>
     </template>

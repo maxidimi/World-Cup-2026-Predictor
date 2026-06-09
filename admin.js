@@ -54,6 +54,12 @@ function formatKickoff(match) {
   return match?.kickoffUtc ? `${kickoffFormatter.format(new Date(match.kickoffUtc))} (${userTimeZone})` : "";
 }
 
+function displayPhase(value) {
+  const phase = String(value || "").trim();
+  const group = phase.match(/GROUP_([A-Z])$/i);
+  return group ? `GROUP ${group[1].toUpperCase()}` : phase.replace(/_/g, " ");
+}
+
 function outcome(home, away) {
   if (home > away) return "1";
   if (home === away) return "x";
@@ -134,7 +140,7 @@ function renderFilters() {
   const select = $("#adminPhase");
   if (select.options.length > 1) return;
   const phases = [...new Set(adminState.overview.stats.map((stat) => stat.match.phase))];
-  phases.forEach((phase) => select.append(new Option(phase, phase)));
+  phases.forEach((phase) => select.append(new Option(displayPhase(phase), phase)));
 }
 
 function renderUsers() {
@@ -235,7 +241,7 @@ function renderStats() {
       <tr>
         <td>
           <strong>${escapeHtml(matchLabel(match))}</strong>
-          <span>${escapeHtml(match.phase)} - ${escapeHtml(formatKickoff(match))}</span>
+          <span>${escapeHtml(displayPhase(match.phase))} - ${escapeHtml(formatKickoff(match))}</span>
         </td>
         <td><strong>${stat.predictionCount}</strong><span>people voted</span></td>
         <td>
@@ -259,7 +265,7 @@ function renderResults() {
       <tr>
         <td>
           <strong>${escapeHtml(matchLabel(match))}</strong>
-          <span>${escapeHtml(match.phase)} - ${escapeHtml(formatKickoff(match))}</span>
+          <span>${escapeHtml(displayPhase(match.phase))} - ${escapeHtml(formatKickoff(match))}</span>
         </td>
         <td><strong>${result ? `${result.home} - ${result.away}` : "Not entered"}</strong></td>
         <td>

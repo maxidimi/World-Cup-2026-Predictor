@@ -2,6 +2,8 @@
 
 A local World Cup prediction web app with MongoDB-backed users, login, admin tools, match storage, and score syncing from football-data.org.
 
+For a complete public Azure deployment procedure, see [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md).
+
 ## Features
 
 - Register and log in with local MongoDB authentication.

@@ -558,6 +558,7 @@ input.invalid {
   border-color: var(--gold);
   color: var(--ink);
 }
+.admin-tab[data-view="metrics"].active { background: var(--blue); border-color: var(--blue); }
 
 .admin-message {
   margin: 12px 0;
@@ -640,6 +641,178 @@ td span {
 .user-detail-stats span {
   color: var(--muted);
   font-weight: 750;
+}
+
+.metrics-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+.metrics-cards > div {
+  min-width: 0;
+  padding: 16px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.metrics-cards > div:nth-child(3n) {
+  border-right: 0;
+}
+
+.metrics-cards span,
+.metrics-cards small {
+  display: block;
+  color: var(--muted);
+}
+
+.metrics-cards span {
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.metrics-cards strong {
+  display: block;
+  margin: 5px 0 3px;
+  font-size: 22px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap: 1px;
+  background: var(--line);
+}
+
+.metrics-chart {
+  min-width: 0;
+  padding: 16px;
+  background: var(--panel);
+}
+
+.metrics-chart-wide {
+  grid-column: 1 / -1;
+}
+
+.metrics-chart-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 18px;
+}
+
+.metrics-chart-title h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.metrics-chart-title span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.traffic-chart {
+  height: 190px;
+  display: grid;
+  grid-template-columns: repeat(15, minmax(8px, 1fr));
+  gap: 5px;
+  align-items: end;
+}
+
+.traffic-column {
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 6px;
+  align-items: end;
+}
+
+.traffic-stack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: end;
+}
+
+.traffic-stack i {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+}
+
+.traffic-requests {
+  background: var(--blue);
+}
+
+.traffic-errors {
+  z-index: 1;
+  background: var(--red);
+}
+
+.traffic-column span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+}
+
+.metric-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.metric-bar-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 160px) 1fr 36px;
+  gap: 10px;
+  align-items: center;
+}
+
+.metric-bar-row > span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-bar-row strong {
+  font-size: 12px;
+  text-align: right;
+}
+
+.metric-bar-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--soft);
+}
+
+.metric-bar-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--green);
+}
+
+.metric-bar-row:nth-child(3n + 2) .metric-bar-track i {
+  background: var(--blue);
+}
+
+.metric-bar-row:nth-child(3n) .metric-bar-track i {
+  background: var(--red);
+}
+
+.metric-empty {
+  margin: 0;
+  color: var(--muted);
 }
 
 .error-page {
@@ -900,6 +1073,26 @@ body[data-auth-mode="register"] .eyebrow {
     grid-template-columns: 1fr;
     align-content: center;
   }
+
+  .metrics-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics-cards > div:nth-child(3n) {
+    border-right: 1px solid var(--line);
+  }
+
+  .metrics-cards > div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-chart-wide {
+    grid-column: auto;
+  }
 }
 
 @media (max-width: 640px) {
@@ -959,5 +1152,24 @@ body[data-auth-mode="register"] .eyebrow {
 
   .teams {
     font-size: 15px;
+  }
+
+  .metrics-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-cards > div,
+  .metrics-cards > div:nth-child(2n),
+  .metrics-cards > div:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .metrics-chart-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metric-bar-row {
+    grid-template-columns: 90px 1fr 30px;
   }
 }

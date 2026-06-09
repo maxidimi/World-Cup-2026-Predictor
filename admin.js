@@ -1,5 +1,6 @@
 const adminState = {
   overview: null,
+  metrics: null,
   search: "",
   phase: "all",
   view: "users",
@@ -35,6 +36,18 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString() : "Never";
+}
+
+function formatBytes(value) {
+  if (!Number.isFinite(value) || value <= 0) return "0 MB";
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return [days ? `${days}d` : "", hours ? `${hours}h` : "", `${minutes}m`].filter(Boolean).join(" ");
 }
 
 function formatKickoff(match) {
@@ -262,6 +275,51 @@ function renderResults() {
   $$(".result-edit").forEach((form) => form.addEventListener("submit", handleEditResult));
 }
 
+function renderMetricBars(container, items, labelKey, valueKey) {
+  const max = Math.max(1, ...items.map((item) => item[valueKey]));
+  container.innerHTML = items.map((item) => `
+    <div class="metric-bar-row">
+      <span title="${escapeHtml(item[labelKey])}">${escapeHtml(item[labelKey])}</span>
+      <div class="metric-bar-track">
+        <i style="width: ${(item[valueKey] / max) * 100}%"></i>
+      </div>
+      <strong>${item[valueKey]}</strong>
+    </div>
+  `).join("") || `<p class="metric-empty">No requests recorded yet.</p>`;
+}
+
+function renderMetrics() {
+  const metrics = adminState.metrics;
+  if (!metrics) return;
+  $("#metricsUpdatedAt").textContent = `Updated ${formatDateTime(metrics.generatedAt)}`;
+  $("#metricsCards").innerHTML = `
+    <div><span>Requests/min</span><strong>${metrics.requests.perMinute}</strong><small>${metrics.requests.lastFiveMinutes} in 5 minutes</small></div>
+    <div><span>p95 latency</span><strong>${metrics.requests.p95Ms} ms</strong><small>p50 ${metrics.requests.p50Ms} ms</small></div>
+    <div><span>Server errors</span><strong>${metrics.requests.errorRate}%</strong><small>HTTP 5xx rate</small></div>
+    <div><span>Memory</span><strong>${formatBytes(metrics.memory.rss)}</strong><small>${formatBytes(metrics.memory.heapUsed)} heap used</small></div>
+    <div><span>Uptime</span><strong>${formatUptime(metrics.uptimeSeconds)}</strong><small>Current process</small></div>
+    <div><span>Database</span><strong>${metrics.app.users} users</strong><small>${metrics.app.predictions} predictions, ${metrics.app.results} results</small></div>
+  `;
+
+  const timeline = metrics.requests.timeline;
+  const timelineMax = Math.max(1, ...timeline.map((item) => item.requests));
+  $("#trafficChart").innerHTML = timeline.map((item) => `
+    <div class="traffic-column" title="${new Date(item.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: ${item.requests} requests, ${item.errors} errors">
+      <div class="traffic-stack">
+        <i class="traffic-errors" style="height: ${(item.errors / timelineMax) * 100}%"></i>
+        <i class="traffic-requests" style="height: ${(item.requests / timelineMax) * 100}%"></i>
+      </div>
+      <span>${new Date(item.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+    </div>
+  `).join("");
+
+  const statuses = Object.entries(metrics.requests.statuses)
+    .map(([status, count]) => ({ status, count }))
+    .sort((a, b) => a.status.localeCompare(b.status));
+  renderMetricBars($("#statusChart"), statuses, "status", "count");
+  renderMetricBars($("#routeChart"), metrics.requests.routes, "route", "count");
+}
+
 function render() {
   if (!adminState.overview) return;
   renderSummary();
@@ -270,11 +328,13 @@ function render() {
   renderPredictions();
   renderStats();
   renderResults();
+  renderMetrics();
   $$(".admin-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === adminState.view));
   $("#usersPanel").classList.toggle("hidden", adminState.view !== "users");
   $("#predictionPanel").classList.toggle("hidden", adminState.view !== "predictions");
   $("#statsPanel").classList.toggle("hidden", adminState.view !== "stats");
   $("#resultsPanel").classList.toggle("hidden", adminState.view !== "results");
+  $("#metricsPanel").classList.toggle("hidden", adminState.view !== "metrics");
   if (adminState.view !== "users") $("#userDetailPanel").classList.add("hidden");
 }
 
@@ -357,8 +417,16 @@ async function loadOverview() {
   render();
 }
 
+async function loadMetrics() {
+  adminState.metrics = await api("/api/admin/metrics");
+  renderMetrics();
+}
+
 function bindEvents() {
-  $("#refreshBtn").addEventListener("click", loadOverview);
+  $("#refreshBtn").addEventListener("click", async () => {
+    await loadOverview();
+    if (adminState.view === "metrics") await loadMetrics();
+  });
   $("#adminSearch").addEventListener("input", (event) => {
     adminState.search = event.target.value;
     render();
@@ -371,6 +439,11 @@ function bindEvents() {
     button.addEventListener("click", () => {
       adminState.view = button.dataset.view;
       render();
+      if (adminState.view === "metrics") {
+        loadMetrics().catch((error) => {
+          $("#adminMessage").textContent = error.message;
+        });
+      }
     });
   });
   $("#closeUserDetail").addEventListener("click", () => {
@@ -378,6 +451,11 @@ function bindEvents() {
     $("#userDetailPanel").classList.add("hidden");
   });
   $("#syncResultsBtn").addEventListener("click", handleSyncResults);
+  $("#refreshMetricsBtn").addEventListener("click", () => {
+    loadMetrics().catch((error) => {
+      $("#adminMessage").textContent = error.message;
+    });
+  });
 }
 
 bindEvents();
@@ -392,3 +470,8 @@ loadOverview().catch((error) => {
   }
   $("#adminMessage").textContent = error.message;
 });
+
+setInterval(() => {
+  if (adminState.view !== "metrics" || document.hidden) return;
+  loadMetrics().catch(() => {});
+}, 15000);

@@ -67,9 +67,10 @@ Create `.env` first:
 ```text
 AUTH_SECRET=replace-with-a-long-random-secret
 FOOTBALL_DATA_TOKEN=
+DOCKER_MONGODB_URI=mongodb://host.docker.internal:27017
 ```
 
-Start the app and MongoDB:
+Make sure the local MongoDB Windows service is running, then start the app and Prometheus:
 
 ```powershell
 docker compose up --build
@@ -81,17 +82,38 @@ Open:
 http://localhost:8000
 ```
 
-MongoDB data is stored in the Docker volume `mongo-data`.
+The Docker app connects to the local MongoDB server visible in Compass through `host.docker.internal:27017`. In Compass, connect to:
+
+```text
+mongodb://127.0.0.1:27017
+```
+
+Open the `world_cup_predictor` database to view users, matches, predictions, results, and password reset records.
+
+Prometheus is available at:
+
+```text
+http://localhost:9090
+```
+
+It scrapes the app's Prometheus-compatible endpoint every 15 seconds:
+
+```text
+http://localhost:8000/metrics
+```
+
+The admin page also includes a Metrics tab with request traffic, latency, error rate, memory, uptime, and database totals.
 
 Useful Docker commands:
 
 ```powershell
 docker compose logs app
+docker compose logs prometheus
 docker compose down
 docker compose down -v
 ```
 
-`docker compose down -v` removes the MongoDB data volume.
+`docker compose down -v` removes Prometheus data. It does not delete the local MongoDB database.
 
 ## Admin Access
 

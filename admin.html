@@ -48,6 +48,7 @@
           <button class="admin-tab" data-view="predictions" type="button">Predictions</button>
           <button class="admin-tab" data-view="stats" type="button">Game stats</button>
           <button class="admin-tab" data-view="results" type="button">Results</button>
+          <button class="admin-tab" data-view="metrics" type="button">Metrics</button>
         </div>
         <div class="control-fields">
           <label>
@@ -168,6 +169,40 @@
             </thead>
             <tbody id="resultRows"></tbody>
           </table>
+        </div>
+      </section>
+
+      <section id="metricsPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2>Application Metrics</h2>
+          <div class="panel-actions">
+            <span id="metricsUpdatedAt">Not loaded</span>
+            <button id="refreshMetricsBtn" class="ghost" type="button">Refresh</button>
+          </div>
+        </div>
+        <div id="metricsCards" class="metrics-cards"></div>
+        <div class="metrics-grid">
+          <section class="metrics-chart" aria-labelledby="trafficChartTitle">
+            <div class="metrics-chart-title">
+              <h3 id="trafficChartTitle">Requests, last 15 minutes</h3>
+              <span>Requests and server errors</span>
+            </div>
+            <div id="trafficChart" class="traffic-chart"></div>
+          </section>
+          <section class="metrics-chart" aria-labelledby="statusChartTitle">
+            <div class="metrics-chart-title">
+              <h3 id="statusChartTitle">Response status</h3>
+              <span>Last 5 minutes</span>
+            </div>
+            <div id="statusChart" class="metric-bars"></div>
+          </section>
+          <section class="metrics-chart metrics-chart-wide" aria-labelledby="routeChartTitle">
+            <div class="metrics-chart-title">
+              <h3 id="routeChartTitle">Most requested routes</h3>
+              <span>Last 5 minutes</span>
+            </div>
+            <div id="routeChart" class="metric-bars"></div>
+          </section>
         </div>
       </section>
     </main>

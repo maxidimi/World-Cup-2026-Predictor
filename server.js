@@ -38,6 +38,10 @@ const publicFiles = new Set([
   "styles.css"
 ]);
 const authRateBuckets = new Map();
+const metricsStartedAt = Date.now();
+const requestMetrics = new Map();
+const recentRequests = [];
+const durationBuckets = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5];
 
 let dbPromise;
 let matchesCache;
@@ -139,6 +143,174 @@ async function getMatches() {
 function sendJson(response, status, payload) {
   response.writeHead(status, securityHeaders({ "Content-Type": types[".json"] }));
   response.end(JSON.stringify(payload));
+}
+
+function normalizeMetricRoute(pathname) {
+  if (pathname.startsWith("/api/predictions/")) return "/api/predictions/:matchId";
+  if (pathname.startsWith("/api/admin/predictions/")) return "/api/admin/predictions/:predictionId";
+  if (pathname.startsWith("/api/admin/results/")) return "/api/admin/results/:matchId";
+  if (pathname.startsWith("/assets/")) return "/assets/:file";
+  return pathname === "/" ? "/" : pathname;
+}
+
+function recordRequestMetric(method, route, status, durationSeconds) {
+  const key = `${method}|${route}|${status}`;
+  const metric = requestMetrics.get(key) || {
+    method,
+    route,
+    status,
+    count: 0,
+    durationSum: 0,
+    buckets: durationBuckets.map(() => 0)
+  };
+  metric.count += 1;
+  metric.durationSum += durationSeconds;
+  durationBuckets.forEach((bucket, index) => {
+    if (durationSeconds <= bucket) metric.buckets[index] += 1;
+  });
+  requestMetrics.set(key, metric);
+  recentRequests.push({ timestamp: Date.now(), method, route, status, durationSeconds });
+  const cutoff = Date.now() - 60 * 60 * 1000;
+  while (recentRequests.length && recentRequests[0].timestamp < cutoff) recentRequests.shift();
+}
+
+function instrumentResponse(request, response, pathname) {
+  const startedAt = process.hrtime.bigint();
+  const originalWriteHead = response.writeHead.bind(response);
+  const originalEnd = response.end.bind(response);
+  let statusCode = 200;
+  let recorded = false;
+
+  response.writeHead = (status, ...args) => {
+    statusCode = status;
+    return originalWriteHead(status, ...args);
+  };
+  response.end = (...args) => {
+    if (!recorded) {
+      recorded = true;
+      const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+      recordRequestMetric(request.method, normalizeMetricRoute(pathname), statusCode, durationSeconds);
+    }
+    return originalEnd(...args);
+  };
+}
+
+function prometheusEscape(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, "\\\"");
+}
+
+async function getApplicationGauges() {
+  const db = await getDb();
+  const [users, predictions, matches, results] = await Promise.all([
+    db.collection("users").countDocuments(),
+    db.collection("predictions").countDocuments(),
+    db.collection("matches").countDocuments({ inactive: { $ne: true } }),
+    db.collection("results").countDocuments()
+  ]);
+  return { users, predictions, matches, results };
+}
+
+async function buildPrometheusMetrics() {
+  const gauges = await getApplicationGauges();
+  const memory = process.memoryUsage();
+  const lines = [
+    "# HELP world_cup_app_info Application information.",
+    "# TYPE world_cup_app_info gauge",
+    `world_cup_app_info{version="${prometheusEscape(require("./package.json").version)}"} 1`,
+    "# HELP world_cup_process_uptime_seconds Process uptime in seconds.",
+    "# TYPE world_cup_process_uptime_seconds gauge",
+    `world_cup_process_uptime_seconds ${process.uptime()}`,
+    "# HELP world_cup_process_memory_bytes Process memory usage in bytes.",
+    "# TYPE world_cup_process_memory_bytes gauge",
+    `world_cup_process_memory_bytes{type="rss"} ${memory.rss}`,
+    `world_cup_process_memory_bytes{type="heap_used"} ${memory.heapUsed}`,
+    `world_cup_process_memory_bytes{type="heap_total"} ${memory.heapTotal}`,
+    "# HELP world_cup_users_total Registered users.",
+    "# TYPE world_cup_users_total gauge",
+    `world_cup_users_total ${gauges.users}`,
+    "# HELP world_cup_predictions_total Stored predictions.",
+    "# TYPE world_cup_predictions_total gauge",
+    `world_cup_predictions_total ${gauges.predictions}`,
+    "# HELP world_cup_matches_total Active matches.",
+    "# TYPE world_cup_matches_total gauge",
+    `world_cup_matches_total ${gauges.matches}`,
+    "# HELP world_cup_results_total Stored match results.",
+    "# TYPE world_cup_results_total gauge",
+    `world_cup_results_total ${gauges.results}`,
+    "# HELP world_cup_http_requests_total HTTP requests handled.",
+    "# TYPE world_cup_http_requests_total counter"
+  ];
+
+  [...requestMetrics.values()].forEach((metric) => {
+    const labels = `method="${prometheusEscape(metric.method)}",route="${prometheusEscape(metric.route)}",status="${metric.status}"`;
+    lines.push(`world_cup_http_requests_total{${labels}} ${metric.count}`);
+  });
+  lines.push(
+    "# HELP world_cup_http_request_duration_seconds HTTP request duration.",
+    "# TYPE world_cup_http_request_duration_seconds histogram"
+  );
+  [...requestMetrics.values()].forEach((metric) => {
+    const labels = `method="${prometheusEscape(metric.method)}",route="${prometheusEscape(metric.route)}",status="${metric.status}"`;
+    durationBuckets.forEach((bucket, index) => {
+      lines.push(`world_cup_http_request_duration_seconds_bucket{${labels},le="${bucket}"} ${metric.buckets[index]}`);
+    });
+    lines.push(`world_cup_http_request_duration_seconds_bucket{${labels},le="+Inf"} ${metric.count}`);
+    lines.push(`world_cup_http_request_duration_seconds_sum{${labels}} ${metric.durationSum}`);
+    lines.push(`world_cup_http_request_duration_seconds_count{${labels}} ${metric.count}`);
+  });
+  return `${lines.join("\n")}\n`;
+}
+
+function percentile(values, percent) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil((percent / 100) * sorted.length) - 1)];
+}
+
+async function buildAdminMetrics() {
+  const gauges = await getApplicationGauges();
+  const memory = process.memoryUsage();
+  const now = Date.now();
+  const lastFiveMinutes = recentRequests.filter((item) => item.timestamp >= now - 5 * 60 * 1000);
+  const durations = lastFiveMinutes.map((item) => item.durationSeconds * 1000);
+  const statusCounts = {};
+  const routeCounts = {};
+  lastFiveMinutes.forEach((item) => {
+    const statusGroup = `${Math.floor(item.status / 100)}xx`;
+    statusCounts[statusGroup] = (statusCounts[statusGroup] || 0) + 1;
+    routeCounts[item.route] = (routeCounts[item.route] || 0) + 1;
+  });
+  const timeline = Array.from({ length: 15 }, (_, index) => {
+    const start = now - (14 - index) * 60 * 1000;
+    const end = start + 60 * 1000;
+    const bucket = recentRequests.filter((item) => item.timestamp >= start && item.timestamp < end);
+    return {
+      time: new Date(start).toISOString(),
+      requests: bucket.length,
+      errors: bucket.filter((item) => item.status >= 500).length
+    };
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    uptimeSeconds: Math.floor((now - metricsStartedAt) / 1000),
+    memory: { rss: memory.rss, heapUsed: memory.heapUsed, heapTotal: memory.heapTotal },
+    app: gauges,
+    requests: {
+      lastFiveMinutes: lastFiveMinutes.length,
+      perMinute: Number((lastFiveMinutes.length / 5).toFixed(1)),
+      errorRate: lastFiveMinutes.length
+        ? Number(((lastFiveMinutes.filter((item) => item.status >= 500).length / lastFiveMinutes.length) * 100).toFixed(1))
+        : 0,
+      p50Ms: Number(percentile(durations, 50).toFixed(1)),
+      p95Ms: Number(percentile(durations, 95).toFixed(1)),
+      statuses: statusCounts,
+      routes: Object.entries(routeCounts)
+        .map(([route, count]) => ({ route, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8),
+      timeline
+    }
+  };
 }
 
 function securityHeaders(extra = {}) {
@@ -773,6 +945,12 @@ async function handleApi(request, response, url) {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/admin/metrics") {
+      if (!await requireAdmin(request, response)) return;
+      sendJson(response, 200, await buildAdminMetrics());
+      return;
+    }
+
     if (request.method === "PUT" && url.pathname.startsWith("/api/admin/predictions/")) {
       if (!await requireAdmin(request, response)) return;
       const predictionId = url.pathname.split("/").pop();
@@ -846,6 +1024,23 @@ async function handleApi(request, response, url) {
 
 http.createServer((request, response) => {
   const url = new URL(request.url, `http://${host}:${port}`);
+  instrumentResponse(request, response, url.pathname);
+
+  if (request.method === "GET" && url.pathname === "/metrics") {
+    buildPrometheusMetrics()
+      .then((metrics) => {
+        response.writeHead(200, securityHeaders({
+          "Content-Type": "text/plain; version=0.0.4; charset=utf-8"
+        }));
+        response.end(metrics);
+      })
+      .catch(() => {
+        response.writeHead(503, securityHeaders({ "Content-Type": "text/plain; charset=utf-8" }));
+        response.end("Metrics unavailable\n");
+      });
+    return;
+  }
+
   if (url.pathname.startsWith("/api/")) {
     handleApi(request, response, url);
     return;

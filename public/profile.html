@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Profile - World Cup Predictor</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </a>
+        <div class="topbar-right">
+          <div class="page-nav" aria-label="Pages">
+            <a class="nav-link" href="index.html">Predictions</a>
+            <a class="nav-link" href="leaderboard.html">Leaderboard</a>
+            <a class="nav-link" href="teams.html">My teams</a>
+          </div>
+          <div class="session header-session">
+            <button class="ghost header-logout" type="button">Log out</button>
+          </div>
+        </div>
+      </nav>
+      <section class="hero-content profile-heading">
+        <p class="eyebrow">Player profile</p>
+        <h1 id="profileNickname">Profile</h1>
+        <p id="profileIdentity" class="lede"></p>
+      </section>
+    </header>
+
+    <main class="profile-main">
+      <section class="summary profile-summary" aria-label="Prediction summary">
+        <div>
+          <strong id="profilePoints">0</strong>
+          <span>points</span>
+        </div>
+        <div>
+          <strong id="profilePredictions">0</strong>
+          <span>predictions</span>
+        </div>
+        <div>
+          <strong id="profileGraded">0</strong>
+          <span>graded</span>
+        </div>
+        <div>
+          <strong id="profileExact">0</strong>
+          <span>exact scores</span>
+        </div>
+        <div>
+          <strong id="profileResults">0</strong>
+          <span>correct results</span>
+        </div>
+      </section>
+
+      <section class="profile-history" aria-labelledby="predictionHistoryTitle">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">History</p>
+            <h2 id="predictionHistoryTitle">My predictions</h2>
+          </div>
+          <a class="ghost-link" href="index.html">Make predictions</a>
+        </div>
+        <p id="profileMessage" class="form-message" role="status">Loading profile...</p>
+        <div id="profilePredictionsList" class="profile-predictions"></div>
+      </section>
+    </main>
+
+    <script src="nav-session.js"></script>
+    <script src="profile.js"></script>
+  </body>
+</html>

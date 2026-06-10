@@ -677,6 +677,110 @@ input.invalid {
   padding: 20px;
 }
 
+.profile-main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.profile-heading .lede {
+  min-height: 24px;
+}
+
+.profile-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.profile-history {
+  margin-top: 20px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.section-heading h2,
+.section-heading p {
+  margin: 0;
+}
+
+.profile-predictions {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-prediction {
+  display: grid;
+  grid-template-columns: minmax(130px, .8fr) minmax(300px, 1.5fr) minmax(170px, .8fr);
+  align-items: center;
+  gap: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.profile-match-meta,
+.profile-result {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-match-meta span {
+  color: var(--blue);
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.profile-match-meta time,
+.profile-result span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.profile-scoreline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.profile-scoreline strong:first-child {
+  text-align: right;
+}
+
+.profile-scoreline strong:last-child {
+  text-align: left;
+}
+
+.profile-score {
+  min-width: 68px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--soft);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.profile-result {
+  justify-items: end;
+  text-align: right;
+}
+
+.profile-points {
+  color: var(--muted);
+}
+
+.profile-points.points-1,
+.profile-points.points-3 {
+  color: var(--green);
+}
+
 .teams-main {
   max-width: 1120px;
   margin: 0 auto;
@@ -1353,6 +1457,25 @@ body[data-auth-mode="register"] .eyebrow {
 }
 
 @media (max-width: 980px) {
+  .profile-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profile-prediction {
+    grid-template-columns: minmax(120px, .7fr) minmax(280px, 1.3fr);
+  }
+
+  .profile-result {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr auto;
+    justify-items: initial;
+    text-align: left;
+  }
+
+  .profile-result strong {
+    text-align: right;
+  }
+
   .topbar {
     align-items: flex-start;
   }
@@ -1484,6 +1607,28 @@ body[data-auth-mode="register"] .eyebrow {
 
   .auth-links {
     flex-direction: column;
+  }
+
+  .profile-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-heading .ghost-link {
+    align-self: flex-start;
+  }
+
+  .profile-prediction {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .profile-result {
+    grid-column: auto;
   }
 
   .hero-content,

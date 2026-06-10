@@ -1,9 +1,11 @@
 const headerLogin = document.querySelector(".header-login");
 const headerLogout = document.querySelector(".header-logout");
+const headerProfile = document.querySelector(".header-profile");
 
 function showHeaderSession(loggedIn) {
   headerLogin?.classList.toggle("hidden", loggedIn);
   headerLogout?.classList.toggle("hidden", !loggedIn);
+  headerProfile?.classList.toggle("hidden", !loggedIn);
 }
 
 async function restoreHeaderSession() {

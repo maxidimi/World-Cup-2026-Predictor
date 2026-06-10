@@ -30,6 +30,8 @@ const publicFiles = new Set([
   "app.js",
   "leaderboard.html",
   "leaderboard.js",
+  "profile.html",
+  "profile.js",
   "teams.html",
   "teams.js",
   "nav-session.js",
@@ -1299,6 +1301,58 @@ async function handleApi(request, response, url) {
         return;
       }
       sendJson(response, 200, { user: publicUser(user) });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/profile") {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to view your profile." });
+        return;
+      }
+      const db = await getDb();
+      const [matches, predictions, results] = await Promise.all([
+        getMatches(),
+        withMongoRetry(() => db.collection("predictions").find({ userId: user._id }).toArray()),
+        withMongoRetry(() => db.collection("results").find({}).toArray())
+      ]);
+      const matchMap = new Map(matches.map((match) => [match.id, match]));
+      const resultMap = new Map(results.map((result) => [result.matchId, result]));
+      const summary = {
+        totalPredictions: predictions.length,
+        graded: 0,
+        points: 0,
+        exactScoreHits: 0,
+        resultHits: 0
+      };
+      const predictionHistory = predictions.map((prediction) => {
+        const match = matchMap.get(prediction.matchId) || null;
+        const result = resultMap.get(prediction.matchId) || null;
+        const points = result ? predictionPoints(prediction, result) : null;
+        if (result) {
+          summary.graded += 1;
+          summary.points += points;
+          if (points === 3) summary.exactScoreHits += 1;
+          if (points > 0) summary.resultHits += 1;
+        }
+        return {
+          matchId: prediction.matchId,
+          match,
+          prediction: { home: prediction.home, away: prediction.away },
+          result: result ? { home: result.home, away: result.away } : null,
+          points,
+          savedAt: prediction.updatedAt
+        };
+      }).sort((left, right) => {
+        const leftDate = new Date(left.match?.kickoffUtc || left.savedAt || 0).getTime();
+        const rightDate = new Date(right.match?.kickoffUtc || right.savedAt || 0).getTime();
+        return rightDate - leftDate;
+      });
+      sendJson(response, 200, {
+        user: publicUser(user),
+        summary,
+        predictions: predictionHistory
+      });
       return;
     }
 

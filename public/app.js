@@ -292,6 +292,7 @@ function renderAuth() {
   const loggedIn = Boolean(state.currentUser);
   $("#guestActions").classList.toggle("hidden", loggedIn);
   $("#logoutBtn").classList.toggle("hidden", !loggedIn);
+  $(".header-profile").classList.toggle("hidden", !loggedIn);
 }
 
 function bindEvents() {

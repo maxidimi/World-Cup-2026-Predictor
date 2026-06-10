@@ -55,6 +55,8 @@ let dbPromise;
 let mongoClient;
 let matchSyncPromise;
 let lastMatchSyncAt = 0;
+let lastMatchSyncAttemptAt = 0;
+let cachedMatches = [];
 
 if (isProduction && !process.env.AUTH_SECRET) {
   throw new Error("AUTH_SECRET must be set when NODE_ENV=production.");
@@ -115,12 +117,48 @@ function getDb() {
   return dbPromise;
 }
 
+function isMongoThrottle(error) {
+  return error?.code === 16500 || /TooManyRequests|Request rate is large/i.test(error?.message || "");
+}
+
+function mongoRetryDelay(error, attempt) {
+  const retryAfter = Number(
+    error?.errorResponse?.RetryAfterMs ||
+    error?.retryAfterMs ||
+    String(error?.message || "").match(/RetryAfterMs[=:](\d+)/i)?.[1] ||
+    100
+  );
+  return Math.max(100, retryAfter) * (attempt + 1);
+}
+
+async function withMongoRetry(operation, attempts = 4) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isMongoThrottle(error) || attempt === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, mongoRetryDelay(error, attempt)));
+    }
+  }
+  return undefined;
+}
+
 async function getMatches() {
   const db = await getDb();
-  return db.collection("matches")
-    .find({ inactive: { $ne: true } }, { projection: { _id: 0 } })
-    .sort({ kickoffUtc: 1, id: 1 })
-    .toArray();
+  try {
+    const matches = await withMongoRetry(() => db.collection("matches")
+      .find({ inactive: { $ne: true } }, { projection: { _id: 0 } })
+      .sort({ kickoffUtc: 1, id: 1 })
+      .toArray());
+    cachedMatches = matches;
+    return matches;
+  } catch (error) {
+    if (isMongoThrottle(error) && cachedMatches.length > 0) {
+      console.warn("Cosmos DB throttled a fixture read; serving the in-memory fixture cache.");
+      return cachedMatches;
+    }
+    throw error;
+  }
 }
 
 function sendJson(response, status, payload) {
@@ -558,6 +596,8 @@ function providerMatchToStoredMatch(apiMatch) {
 }
 
 function findLocalMatchForApiMatch(apiMatch, localMatches) {
+  const providerMatch = localMatches.find((match) => String(match.providerMatchId) === String(apiMatch.id));
+  if (providerMatch) return providerMatch;
   const apiDate = String(apiMatch.utcDate || "").slice(0, 10);
   const home = apiMatch.homeTeam?.name || apiMatch.homeTeam?.shortName || apiMatch.homeTeam?.tla;
   const away = apiMatch.awayTeam?.name || apiMatch.awayTeam?.shortName || apiMatch.awayTeam?.tla;
@@ -586,6 +626,18 @@ async function fetchFootballDataMatches() {
   return data.matches || [];
 }
 
+function valuesMatch(left, right) {
+  if (left instanceof Date || right instanceof Date) {
+    return new Date(left).getTime() === new Date(right).getTime();
+  }
+  return (left ?? null) === (right ?? null);
+}
+
+function recordChanged(existing, next, fields) {
+  if (!existing) return true;
+  return fields.some((field) => !valuesMatch(existing[field], next[field]));
+}
+
 async function syncFootballDataResults({ skipMissingToken = false } = {}) {
   if (!footballDataToken && skipMissingToken) {
     return {
@@ -601,14 +653,23 @@ async function syncFootballDataResults({ skipMissingToken = false } = {}) {
   const db = await getDb();
   const apiMatches = await fetchFootballDataMatches();
   const storedMatches = await getMatches();
+  const storedResults = await withMongoRetry(() => db.collection("results").find({}).toArray());
+  const resultMap = new Map(storedResults.map((result) => [result.matchId, result]));
   const now = new Date();
+  const matchFields = [
+    "date", "phase", "home", "away", "stadium", "city", "kickoffUtc", "kickoffLocal",
+    "stadiumTz", "provider", "providerMatchId", "providerStatus", "source"
+  ];
+  const resultFields = ["home", "away", "provider", "providerMatchId", "providerStatus"];
   const summary = {
     provider: "football-data.org",
     received: apiMatches.length,
     matchRecordsUpdated: 0,
+    matchRecordsUnchanged: 0,
     finished: 0,
     matched: 0,
     updated: 0,
+    resultsUnchanged: 0,
     skipped: []
   };
 
@@ -618,20 +679,24 @@ async function syncFootballDataResults({ skipMissingToken = false } = {}) {
     const matchRecord = localMatch ? { ...localMatch, ...apiStoredMatch, id: localMatch.id, source: "api" } : apiStoredMatch;
     const { createdAt, _id, ...matchUpdate } = matchRecord;
     if (localMatch) summary.matched += 1;
-    await db.collection("matches").updateOne(
-      { id: matchRecord.id },
-      {
-        $set: {
-          ...matchUpdate,
-          inactive: false,
-          syncedAt: now,
-          updatedAt: now
+    matchUpdate.inactive = false;
+    if (recordChanged(localMatch, matchUpdate, matchFields) || localMatch?.inactive === true) {
+      await withMongoRetry(() => db.collection("matches").updateOne(
+        { id: matchRecord.id },
+        {
+          $set: {
+            ...matchUpdate,
+            syncedAt: now,
+            updatedAt: now
+          },
+          $setOnInsert: { createdAt: now }
         },
-        $setOnInsert: { createdAt: now }
-      },
-      { upsert: true }
-    );
-    summary.matchRecordsUpdated += 1;
+        { upsert: true }
+      ));
+      summary.matchRecordsUpdated += 1;
+    } else {
+      summary.matchRecordsUnchanged += 1;
+    }
 
     if (apiMatch.status !== "FINISHED") continue;
     const fullTime = apiMatch.score?.fullTime || {};
@@ -639,25 +704,31 @@ async function syncFootballDataResults({ skipMissingToken = false } = {}) {
     const away = parseScore(fullTime.away);
     if (home === null || away === null) continue;
     summary.finished += 1;
-    if (!matchRecord) continue;
-    await db.collection("results").updateOne(
-      { matchId: matchRecord.id },
-      {
-        $set: {
-          matchId: matchRecord.id,
-          home,
-          away,
-          provider: "football-data.org",
-          providerMatchId: apiMatch.id,
-          providerStatus: apiMatch.status,
-          syncedAt: now,
-          updatedAt: now
+    const resultRecord = {
+      matchId: matchRecord.id,
+      home,
+      away,
+      provider: "football-data.org",
+      providerMatchId: apiMatch.id,
+      providerStatus: apiMatch.status
+    };
+    if (recordChanged(resultMap.get(matchRecord.id), resultRecord, resultFields)) {
+      await withMongoRetry(() => db.collection("results").updateOne(
+        { matchId: matchRecord.id },
+        {
+          $set: {
+            ...resultRecord,
+            syncedAt: now,
+            updatedAt: now
+          },
+          $setOnInsert: { createdAt: now }
         },
-        $setOnInsert: { createdAt: now }
-      },
-      { upsert: true }
-    );
-    summary.updated += 1;
+        { upsert: true }
+      ));
+      summary.updated += 1;
+    } else {
+      summary.resultsUnchanged += 1;
+    }
   }
 
   return summary;
@@ -667,18 +738,33 @@ async function refreshFootballDataIfDue() {
   if (!footballDataToken) {
     return syncFootballDataResults({ skipMissingToken: true });
   }
-  if (Date.now() - lastMatchSyncAt < matchSyncIntervalMs) {
+  const lastRefreshAt = Math.max(lastMatchSyncAt, lastMatchSyncAttemptAt);
+  if (Date.now() - lastRefreshAt < matchSyncIntervalMs) {
     return {
       provider: "football-data.org",
       cached: true,
-      lastSyncedAt: lastMatchSyncAt ? new Date(lastMatchSyncAt).toISOString() : null
+      lastSyncedAt: lastMatchSyncAt ? new Date(lastMatchSyncAt).toISOString() : null,
+      lastAttemptedAt: lastMatchSyncAttemptAt ? new Date(lastMatchSyncAttemptAt).toISOString() : null
     };
   }
   if (!matchSyncPromise) {
+    lastMatchSyncAttemptAt = Date.now();
     matchSyncPromise = syncFootballDataResults({ skipMissingToken: true })
       .then((summary) => {
         lastMatchSyncAt = Date.now();
         return summary;
+      })
+      .catch((error) => {
+        console.error("Fixture synchronization failed:", error);
+        return {
+          provider: "football-data.org",
+          received: 0,
+          matchRecordsUpdated: 0,
+          finished: 0,
+          matched: 0,
+          updated: 0,
+          skipped: [error.message || "Unable to refresh football-data.org matches."]
+        };
       })
       .finally(() => {
         matchSyncPromise = undefined;
@@ -798,11 +884,7 @@ async function getTeamForMember(db, teamId, userId) {
 
 async function buildAdminOverview() {
   const db = await getDb();
-  try {
-    await refreshFootballDataIfDue();
-  } catch {
-    // Admin stats should remain available even when the external score API is down.
-  }
+  void refreshFootballDataIfDue();
   const matches = await getMatches();
   const users = await db.collection("users")
     .find({}, { projection: { passwordHash: 0, passwordSalt: 0 } })
@@ -918,21 +1000,20 @@ async function buildAdminOverview() {
 async function handleApi(request, response, url) {
   try {
     if (request.method === "GET" && url.pathname === "/api/matches") {
-      let sync = null;
-      try {
-        sync = await refreshFootballDataIfDue();
-      } catch (error) {
+      let matches = await getMatches();
+      let sync;
+      if (matches.length > 0) {
+        void refreshFootballDataIfDue();
         sync = {
           provider: "football-data.org",
-          received: 0,
-          matchRecordsUpdated: 0,
-          finished: 0,
-          matched: 0,
-          updated: 0,
-          skipped: [error.message || "Unable to refresh football-data.org matches."]
+          background: true,
+          lastSyncedAt: lastMatchSyncAt ? new Date(lastMatchSyncAt).toISOString() : null
         };
+      } else {
+        sync = await refreshFootballDataIfDue();
+        matches = await getMatches();
       }
-      sendJson(response, 200, { matches: await getMatches(), sync });
+      sendJson(response, 200, { matches, sync });
       return;
     }
 
@@ -1412,6 +1493,7 @@ async function handleApi(request, response, url) {
 
     sendJson(response, 404, { error: "Not found." });
   } catch (error) {
+    console.error(`${request.method} ${url.pathname} failed:`, error);
     if (error.code === 11000) {
       sendJson(response, 409, { error: "An account already exists for this email." });
       return;

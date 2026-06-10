@@ -6,12 +6,14 @@ const { MongoClient, ObjectId } = require("mongodb");
 
 const root = __dirname;
 loadLocalEnv();
+const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || 8000);
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || (isProduction ? "0.0.0.0" : "127.0.0.1");
 const mongoUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017";
 const dbName = process.env.MONGODB_DB || "world_cup_predictor";
 const authSecret = process.env.AUTH_SECRET || crypto.randomBytes(32).toString("hex");
 const footballDataToken = process.env.FOOTBALL_DATA_TOKEN || "";
+const matchSyncIntervalMs = Math.max(1, Number(process.env.MATCH_SYNC_INTERVAL_MINUTES || 5)) * 60 * 1000;
 const footballDataBaseUrl = "https://api.football-data.org/v4";
 const types = {
   ".html": "text/html; charset=utf-8",
@@ -25,6 +27,8 @@ const publicFiles = new Set([
   "admin.html",
   "admin-error.html",
   "app.js",
+  "leaderboard.html",
+  "leaderboard.js",
   "login.html",
   "register.html",
   "auth.js",
@@ -44,10 +48,15 @@ const recentRequests = [];
 const durationBuckets = [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5];
 
 let dbPromise;
-let matchesCache;
+let mongoClient;
+let matchSyncPromise;
+let lastMatchSyncAt = 0;
 
-if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
+if (isProduction && !process.env.AUTH_SECRET) {
   throw new Error("AUTH_SECRET must be set when NODE_ENV=production.");
+}
+if (isProduction && !process.env.MONGODB_URI) {
+  throw new Error("MONGODB_URI must be set when NODE_ENV=production.");
 }
 
 function loadLocalEnv() {
@@ -69,10 +78,15 @@ function loadLocalEnv() {
 
 function getDb() {
   if (!dbPromise) {
-    const client = new MongoClient(mongoUri);
-    dbPromise = client.connect().then(async () => {
-      const db = client.db(dbName);
+    mongoClient = new MongoClient(mongoUri, {
+      appName: "world-cup-predictor",
+      serverSelectionTimeoutMS: 10000
+    });
+    dbPromise = mongoClient.connect().then(async () => {
+      const db = mongoClient.db(dbName);
       await db.collection("users").createIndex({ email: 1 }, { unique: true });
+      await db.collection("users").createIndex({ nicknameKey: 1 }, { unique: true, sparse: true });
+      await ensureUserNicknames(db);
       await db.collection("predictions").createIndex({ userId: 1, matchId: 1 }, { unique: true });
       await db.collection("predictions").createIndex({ matchId: 1 });
       await db.collection("results").createIndex({ matchId: 1 }, { unique: true });
@@ -80,64 +94,23 @@ function getDb() {
       await db.collection("matches").createIndex({ providerMatchId: 1 }, { sparse: true });
       await db.collection("passwordResets").createIndex({ tokenHash: 1 }, { unique: true });
       await db.collection("passwordResets").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-      await seedMatches(db);
       return db;
+    }).catch(async (error) => {
+      dbPromise = undefined;
+      await mongoClient?.close().catch(() => {});
+      mongoClient = undefined;
+      throw error;
     });
   }
   return dbPromise;
 }
 
-function getSeedMatches() {
-  if (!matchesCache) {
-    const source = fs.readFileSync(path.join(root, "app.js"), "utf8");
-    const match = source.match(/const rawMatches = ([\s\S]*?\n\];)/);
-    const rawMatches = JSON.parse(match[1].replace(/;$/, ""));
-    matchesCache = rawMatches.map((item, index) => ({
-      id: `M${index + 1}`,
-      date: item[0],
-      phase: item[1],
-      home: item[2],
-      away: item[3],
-      stadium: item[4],
-      city: item[5],
-      kickoffUtc: item[6],
-      kickoffLocal: item[7],
-      stadiumTz: item[8]
-    }));
-  }
-  return matchesCache;
-}
-
-async function seedMatches(db) {
-  const count = await db.collection("matches").countDocuments();
-  if (count > 0) return;
-  const seededAt = new Date();
-  const operations = getSeedMatches().map((match) => ({
-    updateOne: {
-      filter: { id: match.id },
-      update: {
-        $set: {
-          ...match,
-          source: "seed",
-          updatedAt: seededAt
-        },
-        $setOnInsert: { createdAt: seededAt }
-      },
-      upsert: true
-    }
-  }));
-  if (operations.length) {
-    await db.collection("matches").bulkWrite(operations);
-  }
-}
-
 async function getMatches() {
   const db = await getDb();
-  const matches = await db.collection("matches")
+  return db.collection("matches")
     .find({ inactive: { $ne: true } }, { projection: { _id: 0 } })
     .sort({ kickoffUtc: 1, id: 1 })
     .toArray();
-  return matches.length ? matches : getSeedMatches();
 }
 
 function sendJson(response, status, payload) {
@@ -325,7 +298,9 @@ function securityHeaders(extra = {}) {
 }
 
 function rateLimit(request, response, bucketName, limit, windowMs) {
-  const key = `${bucketName}:${request.socket.remoteAddress || "unknown"}`;
+  const forwardedFor = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const clientAddress = forwardedFor || request.socket.remoteAddress || "unknown";
+  const key = `${bucketName}:${clientAddress}`;
   const now = Date.now();
   const bucket = authRateBuckets.get(key) || { count: 0, resetAt: now + windowMs };
   if (now > bucket.resetAt) {
@@ -370,6 +345,55 @@ function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
+function normalizeNickname(nickname) {
+  return String(nickname || "").trim();
+}
+
+function nicknameKey(nickname) {
+  return normalizeNickname(nickname).toLowerCase();
+}
+
+function isCompatibleNickname(nickname) {
+  return /^[a-z0-9_]{3,20}$/i.test(normalizeNickname(nickname));
+}
+
+function nicknameBase(user) {
+  const source = String(user.nickname || user.name || user.email?.split("@")[0] || "player")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 20);
+  return source.length >= 3 ? source : "player";
+}
+
+async function ensureUserNicknames(db) {
+  const users = db.collection("users");
+  const usedKeys = new Set((await users.distinct("nicknameKey")).filter(Boolean));
+  const missing = await users.find({
+    $or: [
+      { nickname: { $exists: false } },
+      { nicknameKey: { $exists: false } }
+    ]
+  }).sort({ createdAt: 1, _id: 1 }).toArray();
+
+  for (const user of missing) {
+    const base = nicknameBase(user);
+    let nickname = base;
+    let suffix = 2;
+    while (usedKeys.has(nicknameKey(nickname))) {
+      const suffixText = String(suffix);
+      nickname = `${base.slice(0, 20 - suffixText.length)}${suffixText}`;
+      suffix += 1;
+    }
+    usedKeys.add(nicknameKey(nickname));
+    await users.updateOne(
+      { _id: user._id },
+      { $set: { nickname, nicknameKey: nicknameKey(nickname), updatedAt: new Date() } }
+    );
+  }
+}
+
 function isCompatibleEmail(email) {
   const pattern = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
   if (email.length > 254 || /\s/.test(email)) return false;
@@ -383,6 +407,7 @@ function publicUser(user) {
   return {
     id: String(user._id),
     name: user.name,
+    nickname: user.nickname,
     email: user.email,
     isAdmin: Boolean(user.isAdmin)
   };
@@ -407,6 +432,7 @@ function signToken(user) {
     sub: String(user._id),
     email: user.email,
     name: user.name,
+    nickname: user.nickname,
     exp: Date.now() + 1000 * 60 * 60 * 24 * 14
   })).toString("base64url");
   const signature = crypto.createHmac("sha256", authSecret).update(payload).digest("base64url");
@@ -448,7 +474,7 @@ async function requireAdmin(request, response) {
     return null;
   }
   if (!user.isAdmin) {
-    sendJson(response, 403, { error: "Admin access requires the isAdmin flag in the database." });
+    sendJson(response, 403, { error: "You do not have permission to access this area." });
     return null;
   }
   return user;
@@ -467,6 +493,11 @@ function outcome(home, away) {
   if (home > away) return "1";
   if (home === away) return "x";
   return "2";
+}
+
+function predictionPoints(prediction, result) {
+  if (prediction.home === result.home && prediction.away === result.away) return 3;
+  return outcome(prediction.home, prediction.away) === outcome(result.home, result.away) ? 1 : 0;
 }
 
 function normalizeTeamName(value) {
@@ -570,7 +601,7 @@ async function syncFootballDataResults({ skipMissingToken = false } = {}) {
   for (const apiMatch of apiMatches) {
     const localMatch = findLocalMatchForApiMatch(apiMatch, storedMatches);
     const apiStoredMatch = providerMatchToStoredMatch(apiMatch);
-    const matchRecord = localMatch ? { ...localMatch, ...apiStoredMatch, id: localMatch.id, source: "seed+api" } : apiStoredMatch;
+    const matchRecord = localMatch ? { ...localMatch, ...apiStoredMatch, id: localMatch.id, source: "api" } : apiStoredMatch;
     const { createdAt, _id, ...matchUpdate } = matchRecord;
     if (localMatch) summary.matched += 1;
     await db.collection("matches").updateOne(
@@ -615,19 +646,37 @@ async function syncFootballDataResults({ skipMissingToken = false } = {}) {
     summary.updated += 1;
   }
 
-  if (apiMatches.length) {
-    await db.collection("matches").updateMany(
-      { source: "seed" },
-      { $set: { inactive: true, updatedAt: now } }
-    );
-  }
-
   return summary;
+}
+
+async function refreshFootballDataIfDue() {
+  if (!footballDataToken) {
+    return syncFootballDataResults({ skipMissingToken: true });
+  }
+  if (Date.now() - lastMatchSyncAt < matchSyncIntervalMs) {
+    return {
+      provider: "football-data.org",
+      cached: true,
+      lastSyncedAt: lastMatchSyncAt ? new Date(lastMatchSyncAt).toISOString() : null
+    };
+  }
+  if (!matchSyncPromise) {
+    matchSyncPromise = syncFootballDataResults({ skipMissingToken: true })
+      .then((summary) => {
+        lastMatchSyncAt = Date.now();
+        return summary;
+      })
+      .finally(() => {
+        matchSyncPromise = undefined;
+      });
+  }
+  return matchSyncPromise;
 }
 
 function emptyAccuracy() {
   return {
     graded: 0,
+    points: 0,
     exactScoreHits: 0,
     resultHits: 0,
     exactScorePercent: 0,
@@ -643,10 +692,62 @@ function finalizeAccuracy(accuracy) {
   };
 }
 
+async function buildLeaderboard() {
+  const db = await getDb();
+  const [users, predictions, results] = await Promise.all([
+    db.collection("users").find({}, { projection: { nickname: 1 } }).toArray(),
+    db.collection("predictions").find({}).toArray(),
+    db.collection("results").find({}).toArray()
+  ]);
+  const resultMap = new Map(results.map((result) => [result.matchId, result]));
+  const standings = new Map(users.map((user) => [String(user._id), {
+    nickname: user.nickname,
+    points: 0,
+    graded: 0,
+    exactScoreHits: 0,
+    resultHits: 0
+  }]));
+
+  predictions.forEach((prediction) => {
+    const result = resultMap.get(prediction.matchId);
+    const standing = standings.get(String(prediction.userId));
+    if (!result || !standing) return;
+    standing.graded += 1;
+    const points = predictionPoints(prediction, result);
+    const exact = points === 3;
+    const resultHit = points > 0;
+    if (exact) {
+      standing.exactScoreHits += 1;
+      standing.resultHits += 1;
+      standing.points += points;
+    } else if (resultHit) {
+      standing.resultHits += 1;
+      standing.points += points;
+    }
+  });
+
+  const rows = [...standings.values()].sort((left, right) => (
+    right.points - left.points ||
+    right.exactScoreHits - left.exactScoreHits ||
+    right.resultHits - left.resultHits ||
+    left.nickname.localeCompare(right.nickname)
+  ));
+  let previous;
+  rows.forEach((row, index) => {
+    const tied = previous &&
+      previous.points === row.points &&
+      previous.exactScoreHits === row.exactScoreHits &&
+      previous.resultHits === row.resultHits;
+    row.rank = tied ? previous.rank : index + 1;
+    previous = row;
+  });
+  return rows;
+}
+
 async function buildAdminOverview() {
   const db = await getDb();
   try {
-    await syncFootballDataResults({ skipMissingToken: true });
+    await refreshFootballDataIfDue();
   } catch {
     // Admin stats should remain available even when the external score API is down.
   }
@@ -693,6 +794,7 @@ async function buildAdminOverview() {
       const accuracy = userAccuracyMap.get(String(prediction.userId));
       if (accuracy) {
         accuracy.graded += 1;
+        accuracy.points += predictionPoints(prediction, result);
         if (prediction.home === result.home && prediction.away === result.away) accuracy.exactScoreHits += 1;
         if (outcome(prediction.home, prediction.away) === outcome(result.home, result.away)) accuracy.resultHits += 1;
       }
@@ -745,7 +847,7 @@ async function handleApi(request, response, url) {
     if (request.method === "GET" && url.pathname === "/api/matches") {
       let sync = null;
       try {
-        sync = await syncFootballDataResults({ skipMissingToken: true });
+        sync = await refreshFootballDataIfDue();
       } catch (error) {
         sync = {
           provider: "football-data.org",
@@ -761,21 +863,39 @@ async function handleApi(request, response, url) {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/leaderboard") {
+      sendJson(response, 200, {
+        scoring: {
+          exactScore: 3,
+          correctResult: 1
+        },
+        leaderboard: await buildLeaderboard()
+      });
+      return;
+    }
+
     if (request.method === "POST" && url.pathname === "/api/register") {
       if (!rateLimit(request, response, "register", 12, 15 * 60 * 1000)) return;
       const body = await readBody(request);
       const name = String(body.name || "").trim();
+      const nickname = normalizeNickname(body.nickname);
       const email = normalizeEmail(body.email);
       const password = String(body.password || "");
-      if (!name || !isCompatibleEmail(email) || password.length < 8) {
-        sendJson(response, 400, { error: "Name, valid email, and an 8+ character password are required." });
+      if (!name || !isCompatibleNickname(nickname) || !isCompatibleEmail(email) || password.length < 8) {
+        sendJson(response, 400, { error: "Name, valid nickname, email, and an 8+ character password are required." });
         return;
       }
 
       const { salt, hash } = hashPassword(password);
       const db = await getDb();
+      if (await db.collection("users").findOne({ nicknameKey: nicknameKey(nickname) })) {
+        sendJson(response, 409, { error: "That nickname is already taken." });
+        return;
+      }
       const user = {
         name,
+        nickname,
+        nicknameKey: nicknameKey(nickname),
         email,
         passwordSalt: salt,
         passwordHash: hash,
@@ -794,7 +914,7 @@ async function handleApi(request, response, url) {
       const email = normalizeEmail(body.email);
       const password = String(body.password || "");
       if (!isCompatibleEmail(email)) {
-        sendJson(response, 400, { error: "Use a compatible email address, like name@example.com." });
+        sendJson(response, 400, { error: "Enter a valid email address, like name@example.com." });
         return;
       }
       const db = await getDb();
@@ -812,7 +932,7 @@ async function handleApi(request, response, url) {
       const body = await readBody(request);
       const email = normalizeEmail(body.email);
       const responsePayload = {
-        message: "If this email exists, a reset link was created for local use."
+        message: "If an account exists for this email, the reset request has been accepted."
       };
       if (!isCompatibleEmail(email)) {
         sendJson(response, 200, responsePayload);
@@ -836,11 +956,12 @@ async function handleApi(request, response, url) {
         expiresAt,
         createdAt: new Date()
       });
-      sendJson(response, 200, {
-        ...responsePayload,
-        resetUrl: `/reset-password.html?token=${encodeURIComponent(token)}`,
-        expiresAt
-      });
+      const resetPayload = { ...responsePayload };
+      if (process.env.NODE_ENV !== "production") {
+        resetPayload.resetUrl = `/reset-password.html?token=${encodeURIComponent(token)}`;
+        resetPayload.expiresAt = expiresAt;
+      }
+      sendJson(response, 200, resetPayload);
       return;
     }
 
@@ -1009,22 +1130,35 @@ async function handleApi(request, response, url) {
     sendJson(response, 404, { error: "Not found." });
   } catch (error) {
     if (error.code === 11000) {
-      sendJson(response, 409, { error: "That email is already registered. Switch to login." });
+      sendJson(response, 409, { error: "An account already exists for this email." });
       return;
     }
-    let message = "Server error.";
-    if (error.message && error.message.includes("ECONNREFUSED")) {
+    let message = "Something went wrong. Please try again later.";
+    if (process.env.NODE_ENV !== "production" && error.message && error.message.includes("ECONNREFUSED")) {
       message = "MongoDB is not running at mongodb://127.0.0.1:27017.";
-    } else if (error.message && (error.message.includes("FOOTBALL_DATA_TOKEN") || error.message.includes("football-data.org"))) {
+    } else if (process.env.NODE_ENV !== "production" && error.message && (error.message.includes("FOOTBALL_DATA_TOKEN") || error.message.includes("football-data.org"))) {
       message = error.message;
     }
     sendJson(response, 500, { error: message });
   }
 }
 
-http.createServer((request, response) => {
+const server = http.createServer((request, response) => {
   const url = new URL(request.url, `http://${host}:${port}`);
   instrumentResponse(request, response, url.pathname);
+
+  if (request.method === "GET" && url.pathname === "/healthz") {
+    sendJson(response, 200, { status: "ok" });
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/readyz") {
+    getDb()
+      .then((db) => db.command({ ping: 1 }))
+      .then(() => sendJson(response, 200, { status: "ready" }))
+      .catch(() => sendJson(response, 503, { status: "unavailable" }));
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/metrics") {
     buildPrometheusMetrics()
@@ -1075,6 +1209,20 @@ http.createServer((request, response) => {
     response.writeHead(200, securityHeaders({ "Content-Type": types[path.extname(filePath)] || "application/octet-stream" }));
     response.end(data);
   });
-}).listen(port, host, () => {
+});
+
+server.listen(port, host, () => {
   console.log(`World Cup Predictor running at http://${host}:${port}/`);
 });
+
+async function shutdown(signal) {
+  console.log(`${signal} received. Shutting down.`);
+  server.close(async () => {
+    await mongoClient?.close().catch(() => {});
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

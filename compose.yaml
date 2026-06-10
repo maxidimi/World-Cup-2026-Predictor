@@ -11,6 +11,7 @@ services:
       MONGODB_DB: world_cup_predictor
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env before running docker compose}
       FOOTBALL_DATA_TOKEN: ${FOOTBALL_DATA_TOKEN:-}
+      MATCH_SYNC_INTERVAL_MINUTES: ${MATCH_SYNC_INTERVAL_MINUTES:-5}
     restart: unless-stopped
 
   prometheus:

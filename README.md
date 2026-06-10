@@ -1,21 +1,24 @@
 # World Cup Predictor
 
-A local World Cup prediction web app with MongoDB-backed users, login, admin tools, match storage, and score syncing from football-data.org.
+A World Cup prediction web app with MongoDB-backed users, login, admin tools, match storage, and score syncing from football-data.org.
 
 For a complete public Azure deployment procedure, see [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md).
 
 ## Features
 
 - Register and log in with local MongoDB authentication.
+- Choose a unique public nickname during registration.
 - Validate email format before registration or login.
 - Browse World Cup matches by date, team, or phase.
 - Store matches in MongoDB and render the app from the database.
 - Sync available fixtures and scores from football-data.org when `FOOTBALL_DATA_TOKEN` is configured.
 - Save user predictions before kickoff only.
+- View a public leaderboard with 3 points for an exact score and 1 point for the correct 1/X/2 result.
 - Admin dashboard for users, predictions, vote stats, result stats, and manual prediction/result edits.
 - Admin access controlled by the `isAdmin` flag in MongoDB.
 - Local password reset flow.
-- Docker support for running the app and MongoDB together.
+- Docker support for local operation.
+- Low-cost Azure Container Apps and Cosmos DB deployment files.
 
 ## Requirements
 
@@ -33,6 +36,7 @@ MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB=world_cup_predictor
 AUTH_SECRET=replace-with-a-long-random-secret
 FOOTBALL_DATA_TOKEN=your-football-data-org-token
+MATCH_SYNC_INTERVAL_MINUTES=5
 HOST=127.0.0.1
 PORT=8000
 NODE_ENV=development
@@ -40,7 +44,9 @@ NODE_ENV=development
 
 `AUTH_SECRET` is used to sign login tokens. Use a long random value, especially before publishing.
 
-`FOOTBALL_DATA_TOKEN` is optional. Without it, the app still works from MongoDB and the seeded local schedule. With it, `/api/matches` checks football-data.org on refresh and updates stored matches and scores.
+`FOOTBALL_DATA_TOKEN` is required to populate a new database with fixtures. After fixtures have been stored, the app can continue displaying the saved schedule if the provider is temporarily unavailable.
+
+`MATCH_SYNC_INTERVAL_MINUTES` prevents repeated page loads from rewriting every fixture. Admin-triggered synchronization remains immediate.
 
 ## Run Locally
 
@@ -146,15 +152,13 @@ Users without admin permission are redirected to the admin error page.
 
 ## Match Data
 
-The app stores matches in the `matches` collection.
-
-On startup, MongoDB is seeded from the bundled World Cup schedule if the `matches` collection is empty. During normal use, the frontend loads matches from:
+The app stores matches in the `matches` collection. The frontend loads them from:
 
 ```text
 GET /api/matches
 ```
 
-When `FOOTBALL_DATA_TOKEN` is set, that endpoint also tries to refresh fixtures and scores from football-data.org. API-backed rows are marked active. Old seed-only duplicates can be marked inactive and are not shown by the app.
+That endpoint refreshes available fixtures and scores from football-data.org before returning the active records stored in MongoDB. There is no bundled fixture schedule in the frontend or server.
 
 Admin users can also trigger a manual sync:
 
@@ -164,7 +168,7 @@ POST /api/admin/sync-results
 
 ## Database Collections
 
-- `users`: registered users and admin flag.
+- `users`: registered users, public nickname, and admin flag.
 - `predictions`: user score predictions.
 - `results`: official or admin-entered match scores.
 - `matches`: stored fixtures shown by the app.
@@ -183,3 +187,13 @@ Before publishing publicly:
 - Grant admin only through `isAdmin: true` in MongoDB.
 
 The server only serves known public files and assets. It does not serve `.env`, `server.js`, `package.json`, `node_modules`, or other project files.
+
+## Azure
+
+The repository includes:
+
+- `infra/main.bicep`: Container Apps Consumption and Cosmos DB MongoDB free-tier infrastructure.
+- `scripts/deploy-azure.ps1`: initial Azure deployment.
+- `.github/workflows/deploy-azure.yml`: GHCR build and automatic Container App revision deployment.
+
+Follow [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md) for the complete process.

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Leaderboard - World Cup Predictor</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero leaderboard-header">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </a>
+        <div class="session">
+          <a class="nav-link" href="index.html">Predictions</a>
+          <button id="refreshLeaderboard" class="ghost" type="button">Refresh</button>
+        </div>
+      </nav>
+      <section class="hero-content">
+        <p class="eyebrow">Standings</p>
+        <h1>Leaderboard</h1>
+        <p class="lede">3 points for an exact score, 1 point for the correct result.</p>
+      </section>
+    </header>
+
+    <main class="leaderboard-main">
+      <section class="summary leaderboard-summary" aria-label="Leaderboard summary">
+        <div>
+          <strong id="leaderCount">0</strong>
+          <span>players</span>
+        </div>
+        <div>
+          <strong id="gradedCount">0</strong>
+          <span>graded predictions</span>
+        </div>
+        <div>
+          <strong id="topScore">0</strong>
+          <span>leading points</span>
+        </div>
+      </section>
+
+      <p id="leaderboardMessage" class="form-message" role="status"></p>
+      <section class="leaderboard-panel">
+        <div class="table-wrap">
+          <table class="leaderboard-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Points</th>
+                <th>Exact scores</th>
+                <th>Correct results</th>
+                <th>Graded</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="leaderboard.js"></script>
+  </body>
+</html>

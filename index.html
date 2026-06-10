@@ -15,6 +15,7 @@
           <span>World Cup Predictor</span>
         </div>
         <div class="session">
+          <a class="nav-link" href="leaderboard.html">Leaderboard</a>
           <span id="sessionName" class="session-name"></span>
           <div id="guestActions" class="session-actions hidden">
             <a class="text-link" href="login.html">Log in</a>
@@ -26,7 +27,7 @@
       <section class="hero-content">
         <p class="eyebrow">World Cup 2026</p>
         <h1>Match predictions</h1>
-        <p class="lede">Browse fixtures, save scores, and track picks from MongoDB.</p>
+        <p class="lede">Browse fixtures, save scores, and track your predictions.</p>
       </section>
     </header>
 
@@ -46,9 +47,9 @@
             <input id="searchInput" type="search" placeholder="Search team or venue">
           </label>
           <label>
-            <span>Phase</span>
+            <span>Stage</span>
             <select id="phaseFilter">
-              <option value="all">All phases</option>
+              <option value="all">All stages</option>
             </select>
           </label>
           <label>
@@ -63,7 +64,7 @@
 
       <section class="summary" aria-label="Prediction summary">
         <div>
-          <strong id="matchCount">104</strong>
+          <strong id="matchCount">0</strong>
           <span>matches</span>
         </div>
         <div>
@@ -71,7 +72,7 @@
           <span>saved predictions</span>
         </div>
         <div>
-          <strong id="activeView">By date</strong>
+          <strong id="activeView">Date</strong>
           <span>active view</span>
         </div>
       </section>

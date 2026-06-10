@@ -569,6 +569,61 @@ input.invalid {
   overflow: hidden;
 }
 
+.leaderboard-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.leaderboard-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.leaderboard-table {
+  min-width: 680px;
+}
+
+.leaderboard-table th:not(:nth-child(2)),
+.leaderboard-table td:not(:nth-child(2)) {
+  text-align: center;
+}
+
+.leaderboard-table .points {
+  color: var(--green);
+  font-size: 20px;
+}
+
+.leaderboard-table .rank-number {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--soft);
+}
+
+.leaderboard-table .rank-1 .rank-number {
+  background: var(--gold);
+  color: #17202a;
+}
+
+.leaderboard-table .rank-2 .rank-number {
+  background: #cbd5e1;
+  color: #17202a;
+}
+
+.leaderboard-table .rank-3 .rank-number {
+  background: #c47a44;
+  color: white;
+}
+
+[data-theme="dark"] .leaderboard-table .points {
+  color: #59d6a5;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -620,7 +675,7 @@ td span {
 
 .user-detail-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-bottom: 1px solid var(--line);
 }
 
@@ -1129,6 +1184,18 @@ body[data-auth-mode="register"] .eyebrow {
 
   .summary {
     gap: 6px 16px;
+  }
+
+  .user-detail-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .user-detail-stats div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .user-detail-stats div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--line);
   }
 
   .scoreboard {

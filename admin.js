@@ -95,7 +95,7 @@ function matchLabel(match) {
 }
 
 function searchableUser(user) {
-  return [user.name, user.email].join(" ").toLowerCase();
+  return [user.name, user.nickname, user.email].join(" ").toLowerCase();
 }
 
 function searchableMatch(match) {
@@ -113,6 +113,7 @@ function filteredPredictions() {
     const phaseOk = adminState.phase === "all" || prediction.match?.phase === adminState.phase;
     const searchOk = !query || [
       prediction.user?.name,
+      prediction.user?.nickname,
       prediction.user?.email,
       prediction.matchId,
       searchableMatch(prediction.match)
@@ -149,15 +150,16 @@ function renderUsers() {
   $("#userRows").innerHTML = users.map((user) => `
     <tr>
       <td>
-        <strong>${escapeHtml(user.name)}${user.isAdmin ? " (admin)" : ""}</strong>
-        <span>${escapeHtml(user.email)}</span>
+        <strong>${escapeHtml(user.nickname)}${user.isAdmin ? " (admin)" : ""}</strong>
+        <span>${escapeHtml(user.name)} - ${escapeHtml(user.email)}</span>
       </td>
       <td><strong>${user.predictionCount}</strong><span>saved picks</span></td>
+      <td><strong>${user.accuracy.points}</strong><span>leaderboard score</span></td>
       <td><strong>${user.accuracy.exactScorePercent}%</strong><span>${user.accuracy.exactScoreHits}/${user.accuracy.graded} graded</span></td>
       <td><strong>${user.accuracy.resultPercent}%</strong><span>${user.accuracy.resultHits}/${user.accuracy.graded} graded</span></td>
       <td><button class="open-user" data-user-id="${escapeHtml(user.id)}" type="button">Open</button></td>
     </tr>
-  `).join("") || `<tr><td colspan="5"><span>No users match the current search.</span></td></tr>`;
+  `).join("") || `<tr><td colspan="6"><span>No users match the current search.</span></td></tr>`;
 
   $$(".open-user").forEach((button) => {
     button.addEventListener("click", () => {
@@ -174,9 +176,10 @@ function renderUserDetail() {
     return;
   }
   const predictions = adminState.overview.predictions.filter((prediction) => prediction.user.id === user.id);
-  $("#userDetailTitle").textContent = `${user.name} - predictions`;
+  $("#userDetailTitle").textContent = `${user.nickname} - predictions`;
   $("#userDetailStats").innerHTML = `
     <div><strong>${user.predictionCount}</strong><span>predictions</span></div>
+    <div><strong>${user.accuracy.points || 0}</strong><span>leaderboard points</span></div>
     <div><strong>${user.accuracy.exactScorePercent}%</strong><span>exact scores (${user.accuracy.exactScoreHits}/${user.accuracy.graded})</span></div>
     <div><strong>${user.accuracy.resultPercent}%</strong><span>results 1/x/2 (${user.accuracy.resultHits}/${user.accuracy.graded})</span></div>
   `;
@@ -209,8 +212,8 @@ function renderPredictions() {
     return `
       <tr>
         <td>
-          <strong>${escapeHtml(prediction.user.name)}</strong>
-          <span>${escapeHtml(prediction.user.email)}</span>
+          <strong>${escapeHtml(prediction.user.nickname)}</strong>
+          <span>${escapeHtml(prediction.user.name)} - ${escapeHtml(prediction.user.email)}</span>
         </td>
         <td>
           <strong>${escapeHtml(matchLabel(match))}</strong>
@@ -301,7 +304,7 @@ function renderMetrics() {
   $("#metricsCards").innerHTML = `
     <div><span>Requests/min</span><strong>${metrics.requests.perMinute}</strong><small>${metrics.requests.lastFiveMinutes} in 5 minutes</small></div>
     <div><span>p95 latency</span><strong>${metrics.requests.p95Ms} ms</strong><small>p50 ${metrics.requests.p50Ms} ms</small></div>
-    <div><span>Server errors</span><strong>${metrics.requests.errorRate}%</strong><small>HTTP 5xx rate</small></div>
+    <div><span>Application errors</span><strong>${metrics.requests.errorRate}%</strong><small>5xx response rate</small></div>
     <div><span>Memory</span><strong>${formatBytes(metrics.memory.rss)}</strong><small>${formatBytes(metrics.memory.heapUsed)} heap used</small></div>
     <div><span>Uptime</span><strong>${formatUptime(metrics.uptimeSeconds)}</strong><small>Current process</small></div>
     <div><span>Database</span><strong>${metrics.app.users} users</strong><small>${metrics.app.predictions} predictions, ${metrics.app.results} results</small></div>
@@ -400,7 +403,7 @@ async function handleSyncResults() {
   $("#adminMessage").textContent = "";
   try {
     button.disabled = true;
-    $("#adminMessage").textContent = "Syncing scores from football-data.org...";
+    $("#adminMessage").textContent = "Updating match results...";
     const data = await api("/api/admin/sync-results", { method: "POST", body: "{}" });
     const summary = data.summary;
     $("#adminMessage").textContent = `Sync complete: ${summary.updated} results updated, ${summary.finished} finished matches found, ${summary.skipped.length} skipped.`;

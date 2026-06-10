@@ -12,7 +12,7 @@ async function requestReset(event) {
     return;
   }
   try {
-    message.textContent = "Creating reset link...";
+    message.textContent = "Submitting request...";
     const response = await fetch("/api/password-reset/request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -23,7 +23,7 @@ async function requestReset(event) {
     message.textContent = data.message;
     if (data.resetUrl) {
       const resetUrl = new URL(data.resetUrl, window.location.origin).href;
-      linkBox.innerHTML = `Local reset link: <a href="${resetUrl}">${resetUrl}</a>`;
+      linkBox.innerHTML = `Password reset link: <a href="${resetUrl}">Continue</a>`;
       linkBox.classList.remove("hidden");
     }
   } catch (error) {

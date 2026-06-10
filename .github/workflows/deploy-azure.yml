@@ -1,0 +1,67 @@
+name: Build and deploy
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Normalize image name
+        id: image
+        shell: bash
+        run: echo "name=${IMAGE_NAME,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Sign in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+
+  deploy:
+    needs: build
+    if: ${{ vars.AZURE_RESOURCE_GROUP != '' && vars.AZURE_CONTAINER_APP_NAME != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy image revision
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az extension add --name containerapp --upgrade
+            az containerapp update \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ vars.AZURE_CONTAINER_APP_NAME }}" \
+              --image "${{ needs.build.outputs.image }}:${{ github.sha }}" \
+              --output none

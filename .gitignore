@@ -1,2 +1,11 @@
 .env
+.env.*
+!.env.example
+.azure/
+.deployment-parameters.json
 node_modules/
+npm-debug.log*
+coverage/
+*.log
+*.dump
+*.archive

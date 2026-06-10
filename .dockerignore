@@ -1,10 +1,12 @@
 .git
+.github
 .env
+.env.*
 node_modules
 npm-debug.log
-Dockerfile
 compose.yaml
 *.md
 .agents
 .codex
-x.py
+.azure
+.deployment-parameters.json

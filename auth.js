@@ -1,6 +1,7 @@
 const mode = document.body.dataset.authMode;
 const form = document.querySelector("#authForm");
 const nameInput = document.querySelector("#nameInput");
+const nicknameInput = document.querySelector("#nicknameInput");
 const emailInput = document.querySelector("#emailInput");
 const passwordInput = document.querySelector("#passwordInput");
 const submitButton = document.querySelector("#authSubmit");
@@ -27,9 +28,15 @@ function validate({ requireFields = true } = {}) {
   const name = nameInput?.value.trim() || "";
   const email = emailInput.value.trim();
   const password = passwordInput.value;
-  const errors = { name: "", email: "", password: "" };
+  const nickname = nicknameInput?.value.trim() || "";
+  const errors = { name: "", nickname: "", email: "", password: "" };
 
   if (mode === "register" && requireFields && !name) errors.name = "Name is required.";
+  if (mode === "register" && requireFields && !nickname) {
+    errors.nickname = "Nickname is required.";
+  } else if (mode === "register" && nickname && !/^[a-z0-9_]{3,20}$/i.test(nickname)) {
+    errors.nickname = "Use 3-20 letters, numbers, or underscores.";
+  }
   if (requireFields && !email) {
     errors.email = "Email is required.";
   } else if (email && !isCompatibleEmail(email)) {
@@ -42,9 +49,10 @@ function validate({ requireFields = true } = {}) {
   }
 
   setFieldError(nameInput, document.querySelector("#nameError"), errors.name);
+  setFieldError(nicknameInput, document.querySelector("#nicknameError"), errors.nickname);
   setFieldError(emailInput, document.querySelector("#emailError"), errors.email);
   setFieldError(passwordInput, document.querySelector("#passwordError"), errors.password);
-  return !errors.name && !errors.email && !errors.password;
+  return !errors.name && !errors.nickname && !errors.email && !errors.password;
 }
 
 async function submitAuth(event) {
@@ -60,7 +68,10 @@ async function submitAuth(event) {
     email: emailInput.value.trim().toLowerCase(),
     password: passwordInput.value
   };
-  if (mode === "register") payload.name = nameInput.value.trim();
+  if (mode === "register") {
+    payload.name = nameInput.value.trim();
+    payload.nickname = nicknameInput.value.trim();
+  }
 
   try {
     const response = await fetch(mode === "register" ? "/api/register" : "/api/login", {
@@ -78,7 +89,7 @@ async function submitAuth(event) {
   }
 }
 
-[nameInput, emailInput, passwordInput].filter(Boolean).forEach((input) => {
+[nameInput, nicknameInput, emailInput, passwordInput].filter(Boolean).forEach((input) => {
   input.addEventListener("input", () => {
     validate({ requireFields: false });
     message.textContent = "";

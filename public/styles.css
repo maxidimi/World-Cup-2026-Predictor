@@ -781,6 +781,43 @@ input.invalid {
   color: var(--green);
 }
 
+.password-reset-list {
+  display: grid;
+}
+
+.password-reset-request {
+  display: grid;
+  grid-template-columns: minmax(220px, .8fr) minmax(360px, 1.4fr);
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.password-reset-request:last-child {
+  border-bottom: 0;
+}
+
+.password-reset-request > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.password-reset-request span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.password-reset-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+}
+
+.password-reset-actions input {
+  min-width: 0;
+}
+
 .teams-main {
   max-width: 1120px;
   margin: 0 auto;
@@ -1457,6 +1494,10 @@ body[data-auth-mode="register"] .eyebrow {
 }
 
 @media (max-width: 980px) {
+  .password-reset-request {
+    grid-template-columns: 1fr;
+  }
+
   .profile-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1629,6 +1670,14 @@ body[data-auth-mode="register"] .eyebrow {
 
   .profile-result {
     grid-column: auto;
+  }
+
+  .password-reset-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .password-reset-actions input {
+    grid-column: 1 / -1;
   }
 
   .hero-content,

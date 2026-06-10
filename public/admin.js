@@ -354,6 +354,31 @@ function renderResults() {
   $$(".result-edit").forEach((form) => form.addEventListener("submit", handleEditResult));
 }
 
+function renderPasswordResets() {
+  const requests = adminState.overview.passwordResets || [];
+  $("#passwordResetCount").textContent = `${requests.length} ${requests.length === 1 ? "request" : "requests"}`;
+  $("#passwordResetList").innerHTML = requests.map((request) => {
+    const resetUrl = request.resetPath ? new URL(request.resetPath, window.location.origin).href : "";
+    return `
+      <article class="password-reset-request">
+        <div>
+          <strong>${escapeHtml(request.user.nickname || request.user.name)}</strong>
+          <span>${escapeHtml(request.user.name)} - ${escapeHtml(request.user.email)}</span>
+          <span>Requested ${escapeHtml(formatDateTime(request.createdAt))} · expires ${escapeHtml(formatDateTime(request.expiresAt))}</span>
+        </div>
+        <div class="password-reset-actions">
+          <input value="${escapeHtml(resetUrl)}" readonly aria-label="Password reset URL for ${escapeHtml(request.user.email)}">
+          <button class="copy-reset-url" data-reset-url="${escapeHtml(resetUrl)}" type="button" ${resetUrl ? "" : "disabled"}>Copy URL</button>
+          <button class="ghost regenerate-reset-url" data-reset-id="${escapeHtml(request.id)}" type="button">New URL</button>
+        </div>
+      </article>
+    `;
+  }).join("") || `<p class="empty-state">There are no active password reset requests.</p>`;
+
+  $$(".copy-reset-url").forEach((button) => button.addEventListener("click", handleCopyResetUrl));
+  $$(".regenerate-reset-url").forEach((button) => button.addEventListener("click", handleRegenerateResetUrl));
+}
+
 function renderMetricBars(container, items, labelKey, valueKey) {
   const max = Math.max(1, ...items.map((item) => item[valueKey]));
   container.innerHTML = items.map((item) => `
@@ -406,6 +431,7 @@ function render() {
   renderPredictions();
   renderStats();
   renderResults();
+  renderPasswordResets();
   renderMetrics();
   $$(".admin-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === adminState.view));
   $("#usersPanel").classList.toggle("hidden", adminState.view !== "users");
@@ -413,6 +439,7 @@ function render() {
   $("#predictionPanel").classList.toggle("hidden", adminState.view !== "predictions");
   $("#statsPanel").classList.toggle("hidden", adminState.view !== "stats");
   $("#resultsPanel").classList.toggle("hidden", adminState.view !== "results");
+  $("#passwordResetsPanel").classList.toggle("hidden", adminState.view !== "password-resets");
   $("#metricsPanel").classList.toggle("hidden", adminState.view !== "metrics");
   if (adminState.view !== "users") $("#userDetailPanel").classList.add("hidden");
 }
@@ -528,6 +555,35 @@ async function handleSyncResults() {
     const summary = data.summary;
     $("#adminMessage").textContent = `Sync complete: ${summary.updated} results updated, ${summary.finished} finished matches found, ${summary.skipped.length} skipped.`;
     await loadOverview();
+  } catch (error) {
+    $("#adminMessage").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleCopyResetUrl(event) {
+  const button = event.currentTarget;
+  try {
+    await navigator.clipboard.writeText(button.dataset.resetUrl);
+    $("#adminMessage").textContent = "Password reset URL copied.";
+  } catch {
+    $("#adminMessage").textContent = "Unable to copy automatically. Select and copy the URL from the field.";
+  }
+}
+
+async function handleRegenerateResetUrl(event) {
+  const button = event.currentTarget;
+  try {
+    button.disabled = true;
+    const data = await api(`/api/admin/password-resets/${button.dataset.resetId}`, {
+      method: "POST",
+      body: "{}"
+    });
+    const resetUrl = new URL(data.resetPath, window.location.origin).href;
+    await loadOverview();
+    await navigator.clipboard.writeText(resetUrl).catch(() => {});
+    $("#adminMessage").textContent = "A new password reset URL was created and copied.";
   } catch (error) {
     $("#adminMessage").textContent = error.message;
   } finally {

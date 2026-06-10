@@ -324,4 +324,6 @@ Other nearby alternatives include `swedencentral`, `francecentral`, and `germany
 
 ## Password Reset
 
-The existing reset-link display is intended for local development. Production does not expose reset tokens. Before relying on public password recovery, connect the server to an email provider and send the generated reset URL by email.
+Password reset requests are recorded for the administrator. The requester is instructed to contact the administrator, who can copy or regenerate the one-hour reset URL from the **Password resets** page in the admin dashboard.
+
+Reset tokens are hashed for validation and separately encrypted for admin display. Each link is single-use. For a larger public deployment, replace this manual handoff with an email provider.

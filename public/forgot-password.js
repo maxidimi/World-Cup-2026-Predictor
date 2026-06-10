@@ -1,12 +1,9 @@
 const form = document.querySelector("#forgotForm");
 const message = document.querySelector("#forgotMessage");
-const linkBox = document.querySelector("#resetLinkBox");
 
 async function requestReset(event) {
   event.preventDefault();
   const email = document.querySelector("#resetEmail").value.trim().toLowerCase();
-  linkBox.classList.add("hidden");
-  linkBox.textContent = "";
   if (!email) {
     message.textContent = "Email is required.";
     return;
@@ -21,11 +18,7 @@ async function requestReset(event) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Request failed.");
     message.textContent = data.message;
-    if (data.resetUrl) {
-      const resetUrl = new URL(data.resetUrl, window.location.origin).href;
-      linkBox.innerHTML = `Password reset link: <a href="${resetUrl}">Continue</a>`;
-      linkBox.classList.remove("hidden");
-    }
+    form.reset();
   } catch (error) {
     message.textContent = error.message;
   }

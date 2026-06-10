@@ -58,6 +58,7 @@
           <button class="admin-tab" data-view="predictions" type="button">Predictions</button>
           <button class="admin-tab" data-view="stats" type="button">Game stats</button>
           <button class="admin-tab" data-view="results" type="button">Results</button>
+          <button class="admin-tab" data-view="password-resets" type="button">Password resets</button>
           <button class="admin-tab" data-view="metrics" type="button">Metrics</button>
         </div>
         <div class="control-fields">
@@ -189,6 +190,14 @@
             <tbody id="resultRows"></tbody>
           </table>
         </div>
+      </section>
+
+      <section id="passwordResetsPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2>Password Reset Requests</h2>
+          <span id="passwordResetCount">0 requests</span>
+        </div>
+        <div id="passwordResetList" class="password-reset-list"></div>
       </section>
 
       <section id="metricsPanel" class="admin-panel hidden">

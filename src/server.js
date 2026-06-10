@@ -476,6 +476,33 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+function encryptResetToken(token) {
+  const key = crypto.createHash("sha256").update(authSecret).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
+  return {
+    encryptedToken: encrypted.toString("base64url"),
+    tokenIv: iv.toString("base64url"),
+    tokenTag: cipher.getAuthTag().toString("base64url")
+  };
+}
+
+function decryptResetToken(reset) {
+  try {
+    if (!reset.encryptedToken || !reset.tokenIv || !reset.tokenTag) return "";
+    const key = crypto.createHash("sha256").update(authSecret).digest();
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(reset.tokenIv, "base64url"));
+    decipher.setAuthTag(Buffer.from(reset.tokenTag, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(reset.encryptedToken, "base64url")),
+      decipher.final()
+    ]).toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
 function verifyPassword(password, user) {
   const { hash } = hashPassword(password, user.passwordSalt);
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(user.passwordHash, "hex"));
@@ -895,6 +922,10 @@ async function buildAdminOverview() {
   const predictions = await db.collection("predictions").find({}).sort({ updatedAt: -1 }).toArray();
   const results = await db.collection("results").find({}).toArray();
   const teams = await db.collection("teams").find({}).sort({ createdAt: -1 }).toArray();
+  const passwordResets = await db.collection("passwordResets")
+    .find({ usedAt: { $exists: false }, expiresAt: { $gt: new Date() } })
+    .sort({ createdAt: -1 })
+    .toArray();
   const userMap = new Map(users.map((user) => [String(user._id), publicUser(user)]));
   const matchMap = new Map(matches.map((match) => [match.id, match]));
   const resultMap = new Map(results.map((result) => [result.matchId, result]));
@@ -988,6 +1019,21 @@ async function buildAdminOverview() {
       createdAt: team.createdAt,
       updatedAt: team.updatedAt
     })),
+    passwordResets: passwordResets.map((reset) => {
+      const token = decryptResetToken(reset);
+      return {
+        id: String(reset._id),
+        user: userMap.get(String(reset.userId)) || {
+          id: String(reset.userId),
+          nickname: "Deleted user",
+          name: "Deleted user",
+          email: ""
+        },
+        resetPath: token ? `/reset-password.html?token=${encodeURIComponent(token)}` : "",
+        createdAt: reset.createdAt,
+        expiresAt: reset.expiresAt
+      };
+    }),
     stats,
     totals: {
       users: users.length,
@@ -1229,7 +1275,7 @@ async function handleApi(request, response, url) {
       const body = await readBody(request);
       const email = normalizeEmail(body.email);
       const responsePayload = {
-        message: "If an account exists for this email, the reset request has been accepted."
+        message: "If an account exists for this email, the request has been recorded. Contact the administrator to receive your password reset link."
       };
       if (!isCompatibleEmail(email)) {
         sendJson(response, 200, responsePayload);
@@ -1242,7 +1288,7 @@ async function handleApi(request, response, url) {
         return;
       }
       const token = crypto.randomBytes(32).toString("base64url");
-      const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
       await db.collection("passwordResets").updateMany(
         { userId: user._id, usedAt: { $exists: false } },
         { $set: { usedAt: new Date(), superseded: true } }
@@ -1250,15 +1296,11 @@ async function handleApi(request, response, url) {
       await db.collection("passwordResets").insertOne({
         userId: user._id,
         tokenHash: hashToken(token),
+        ...encryptResetToken(token),
         expiresAt,
         createdAt: new Date()
       });
-      const resetPayload = { ...responsePayload };
-      if (process.env.NODE_ENV !== "production") {
-        resetPayload.resetUrl = `/reset-password.html?token=${encodeURIComponent(token)}`;
-        resetPayload.expiresAt = expiresAt;
-      }
-      sendJson(response, 200, resetPayload);
+      sendJson(response, 200, responsePayload);
       return;
     }
 
@@ -1418,6 +1460,42 @@ async function handleApi(request, response, url) {
     if (request.method === "GET" && url.pathname === "/api/admin/metrics") {
       if (!await requireAdmin(request, response)) return;
       sendJson(response, 200, await buildAdminMetrics());
+      return;
+    }
+
+    const adminPasswordResetMatch = url.pathname.match(/^\/api\/admin\/password-resets\/([^/]+)$/);
+    if (request.method === "POST" && adminPasswordResetMatch) {
+      if (!await requireAdmin(request, response)) return;
+      if (!ObjectId.isValid(adminPasswordResetMatch[1])) {
+        sendJson(response, 404, { error: "Password reset request not found." });
+        return;
+      }
+      const db = await getDb();
+      const reset = await db.collection("passwordResets").findOne({
+        _id: new ObjectId(adminPasswordResetMatch[1]),
+        usedAt: { $exists: false }
+      });
+      if (!reset) {
+        sendJson(response, 404, { error: "Password reset request not found or already used." });
+        return;
+      }
+      const token = crypto.randomBytes(32).toString("base64url");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      await db.collection("passwordResets").updateOne(
+        { _id: reset._id },
+        {
+          $set: {
+            tokenHash: hashToken(token),
+            ...encryptResetToken(token),
+            expiresAt,
+            regeneratedAt: new Date()
+          }
+        }
+      );
+      sendJson(response, 200, {
+        resetPath: `/reset-password.html?token=${encodeURIComponent(token)}`,
+        expiresAt
+      });
       return;
     }
 

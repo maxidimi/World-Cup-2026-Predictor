@@ -6,7 +6,6 @@
 
   function applyTheme(theme) {
     document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
     const button = document.querySelector("#themeToggle");
     if (!button) return;
     const dark = theme === "dark";

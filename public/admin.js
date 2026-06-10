@@ -359,9 +359,7 @@ function renderMetricBars(container, items, labelKey, valueKey) {
   container.innerHTML = items.map((item) => `
     <div class="metric-bar-row">
       <span title="${escapeHtml(item[labelKey])}">${escapeHtml(item[labelKey])}</span>
-      <div class="metric-bar-track">
-        <i style="width: ${(item[valueKey] / max) * 100}%"></i>
-      </div>
+      <progress class="metric-bar-track" max="${max}" value="${item[valueKey]}" aria-label="${escapeHtml(item[labelKey])}: ${item[valueKey]}"></progress>
       <strong>${item[valueKey]}</strong>
     </div>
   `).join("") || `<p class="metric-empty">No requests recorded yet.</p>`;
@@ -385,8 +383,8 @@ function renderMetrics() {
   $("#trafficChart").innerHTML = timeline.map((item) => `
     <div class="traffic-column" title="${new Date(item.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: ${item.requests} requests, ${item.errors} errors">
       <div class="traffic-stack">
-        <i class="traffic-errors" style="height: ${(item.errors / timelineMax) * 100}%"></i>
-        <i class="traffic-requests" style="height: ${(item.requests / timelineMax) * 100}%"></i>
+        <progress class="traffic-requests" max="${timelineMax}" value="${item.requests}" aria-label="${item.requests} requests"></progress>
+        <progress class="traffic-errors" max="${timelineMax}" value="${item.errors}" aria-label="${item.errors} errors"></progress>
       </div>
       <span>${new Date(item.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
     </div>

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --ink: #17202a;
   --muted: #667085;
   --line: #d7dde4;
@@ -23,6 +24,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --ink: #f4f7fb;
   --muted: #aab5c4;
   --line: #344153;
@@ -1008,21 +1010,41 @@ td span {
   align-items: end;
 }
 
-.traffic-stack i {
+.traffic-stack progress {
+  appearance: none;
+  writing-mode: vertical-lr;
+  direction: rtl;
   position: absolute;
   bottom: 0;
   width: 100%;
-  min-height: 2px;
+  height: 100%;
+  border: 0;
   border-radius: 3px 3px 0 0;
+  background: transparent;
 }
 
-.traffic-requests {
+.traffic-stack progress::-webkit-progress-bar {
+  background: transparent;
+}
+
+.traffic-requests::-webkit-progress-value {
   background: var(--blue);
+}
+
+.traffic-errors::-webkit-progress-value {
+  background: var(--red);
+}
+
+.traffic-requests::-moz-progress-bar {
+  background: var(--blue);
+}
+
+.traffic-errors::-moz-progress-bar {
+  background: var(--red);
 }
 
 .traffic-errors {
   z-index: 1;
-  background: var(--red);
 }
 
 .traffic-column span {
@@ -1058,25 +1080,40 @@ td span {
 }
 
 .metric-bar-track {
+  appearance: none;
+  width: 100%;
   height: 8px;
   overflow: hidden;
+  border: 0;
   border-radius: 4px;
   background: var(--soft);
 }
 
-.metric-bar-track i {
-  display: block;
-  height: 100%;
-  min-width: 2px;
-  border-radius: inherit;
+.metric-bar-track::-webkit-progress-bar {
+  background: var(--soft);
+}
+
+.metric-bar-track::-webkit-progress-value {
   background: var(--green);
 }
 
-.metric-bar-row:nth-child(3n + 2) .metric-bar-track i {
+.metric-bar-track::-moz-progress-bar {
+  background: var(--green);
+}
+
+.metric-bar-row:nth-child(3n + 2) .metric-bar-track::-webkit-progress-value {
   background: var(--blue);
 }
 
-.metric-bar-row:nth-child(3n) .metric-bar-track i {
+.metric-bar-row:nth-child(3n + 2) .metric-bar-track::-moz-progress-bar {
+  background: var(--blue);
+}
+
+.metric-bar-row:nth-child(3n) .metric-bar-track::-webkit-progress-value {
+  background: var(--red);
+}
+
+.metric-bar-row:nth-child(3n) .metric-bar-track::-moz-progress-bar {
   background: var(--red);
 }
 

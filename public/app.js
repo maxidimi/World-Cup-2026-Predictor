@@ -141,7 +141,9 @@ function groupMatches(items) {
   items.forEach((match) => {
     let keys;
     if (state.groupBy === "team") {
-      keys = [match.home, match.away].filter((team) => !/^(Winner|Runner-up|Loser|3rd)/.test(team));
+      keys = state.team !== "all"
+        ? [state.team]
+        : [match.home, match.away].filter((team) => !/^(Winner|Runner-up|Loser|3rd)/.test(team));
       if (!keys.length) keys = ["Knockout placeholders"];
     } else if (state.groupBy === "phase") {
       keys = [displayPhase(match.phase)];

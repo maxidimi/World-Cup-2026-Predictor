@@ -56,7 +56,16 @@ $deployment = az deployment group create `
   --output json
 
 if ($LASTEXITCODE -ne 0) {
-  throw "Azure deployment failed."
+  $failedOperations = az deployment operation group list `
+    --resource-group $ResourceGroup `
+    --name main `
+    --query "[?properties.provisioningState=='Failed'].properties.statusMessage.error.message" `
+    --output tsv 2>$null
+
+  if ($failedOperations -match "CapacityHeavyUsage|heavy usage") {
+    throw "Azure has no Container Apps capacity in '$Location' right now. Retry later, or remove the failed resource group and deploy in another region such as northeurope."
+  }
+  throw "Azure deployment failed. Review the deployment named 'main' in resource group '$ResourceGroup'."
 }
 
 $outputs = $deployment | ConvertFrom-Json

@@ -4,7 +4,8 @@ const path = require("path");
 const crypto = require("crypto");
 const { MongoClient, ObjectId } = require("mongodb");
 
-const root = __dirname;
+const projectRoot = path.resolve(__dirname, "..");
+const publicRoot = path.join(projectRoot, "public");
 loadLocalEnv();
 const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || 8000);
@@ -60,7 +61,7 @@ if (isProduction && !process.env.MONGODB_URI) {
 }
 
 function loadLocalEnv() {
-  const envPath = path.join(root, ".env");
+  const envPath = path.join(projectRoot, ".env");
   if (!fs.existsSync(envPath)) return;
   const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
   lines.forEach((line) => {
@@ -189,7 +190,7 @@ async function buildPrometheusMetrics() {
   const lines = [
     "# HELP world_cup_app_info Application information.",
     "# TYPE world_cup_app_info gauge",
-    `world_cup_app_info{version="${prometheusEscape(require("./package.json").version)}"} 1`,
+    `world_cup_app_info{version="${prometheusEscape(require("../package.json").version)}"} 1`,
     "# HELP world_cup_process_uptime_seconds Process uptime in seconds.",
     "# TYPE world_cup_process_uptime_seconds gauge",
     `world_cup_process_uptime_seconds ${process.uptime()}`,
@@ -1198,7 +1199,7 @@ const server = http.createServer((request, response) => {
     return;
   }
 
-  const filePath = path.join(root, normalized);
+  const filePath = path.join(publicRoot, normalized);
 
   fs.readFile(filePath, (error, data) => {
     if (error) {

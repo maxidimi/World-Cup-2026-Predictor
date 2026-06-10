@@ -294,6 +294,34 @@ az group delete `
 
 The automatic match sync is throttled by `MATCH_SYNC_INTERVAL_MINUTES`, defaulting to five minutes, so repeated page loads do not repeatedly rewrite all fixtures.
 
+## Container Apps Regional Capacity Error
+
+If deployment fails with `ManagedEnvironmentCapacityHeavyUsageError`, Azure temporarily has no Container Apps capacity in the selected region. This is not an application or template error.
+
+If this was the first deployment and the database is still empty, remove the incomplete resource group:
+
+```powershell
+az group delete `
+  --name world-cup-predictor-rg `
+  --yes
+```
+
+Wait until deletion finishes:
+
+```powershell
+az group wait `
+  --name world-cup-predictor-rg `
+  --deleted
+```
+
+Then choose another nearby region:
+
+```powershell
+.\scripts\deploy-azure.ps1 -Location northeurope
+```
+
+Other nearby alternatives include `swedencentral`, `francecentral`, and `germanywestcentral`.
+
 ## Password Reset
 
 The existing reset-link display is intended for local development. Production does not expose reset tokens. Before relying on public password recovery, connect the server to an email provider and send the generated reset URL by email.

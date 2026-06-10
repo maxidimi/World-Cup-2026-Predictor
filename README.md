@@ -2,7 +2,7 @@
 
 A World Cup prediction web app with MongoDB-backed users, login, admin tools, match storage, and score syncing from football-data.org.
 
-For a complete public Azure deployment procedure, see [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md).
+For a complete public Azure deployment procedure, see [Azure deployment](docs/AZURE_DEPLOYMENT.md).
 
 ## Features
 
@@ -26,6 +26,22 @@ For a complete public Azure deployment procedure, see [AZURE_DEPLOYMENT.md](AZUR
 - MongoDB
 - Optional: Docker and Docker Compose
 - Optional: a football-data.org API token
+
+## Project Structure
+
+```text
+.
+|-- public/                 Browser pages, scripts, styles, and images
+|-- src/                    Node.js server
+|-- docs/                   Deployment and operational documentation
+|-- infra/                  Azure Bicep infrastructure
+|-- scripts/                Deployment helpers
+|-- .github/workflows/      CI and Azure deployment workflow
+|-- compose.yaml            Local app and Prometheus services
+|-- Dockerfile              Production application image
+|-- package.json            Node.js dependencies and commands
+`-- prometheus.yml          Local Prometheus configuration
+```
 
 ## Environment
 
@@ -186,7 +202,7 @@ Before publishing publicly:
 - Use HTTPS in front of the app.
 - Grant admin only through `isAdmin: true` in MongoDB.
 
-The server only serves known public files and assets. It does not serve `.env`, `server.js`, `package.json`, `node_modules`, or other project files.
+The server only serves allow-listed files from `public/`. It does not expose `.env`, `src/`, `package.json`, `node_modules`, infrastructure, scripts, or documentation.
 
 ## Azure
 
@@ -196,4 +212,4 @@ The repository includes:
 - `scripts/deploy-azure.ps1`: initial Azure deployment.
 - `.github/workflows/deploy-azure.yml`: GHCR build and automatic Container App revision deployment.
 
-Follow [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md) for the complete process.
+Follow [Azure deployment](docs/AZURE_DEPLOYMENT.md) for the complete process.

@@ -50,7 +50,8 @@ button, input, select {
 }
 
 button,
-.button-link {
+.button-link,
+.ghost-link {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
@@ -93,7 +94,6 @@ a:focus-visible {
   color: var(--ink);
 }
 
-.nav-link,
 .brand-link {
   color: inherit;
   text-decoration: none;
@@ -126,6 +126,57 @@ a:focus-visible {
   font-weight: 800;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
+
+.page-nav {
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--subtle);
+}
+
+.nav-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-link:last-child {
+  border-right: 0;
+}
+
+.nav-link:hover {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.nav-link.active {
+  background: var(--blue);
+  color: white;
+}
+
+.utility-actions {
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+
 .brand-mark {
   display: grid;
   place-items: center;
@@ -139,8 +190,7 @@ a:focus-visible {
   font-size: 12px;
 }
 
-.session-name,
-.nav-link {
+.session-name {
   color: var(--muted);
   font-weight: 700;
 }
@@ -551,6 +601,7 @@ input.invalid {
 }
 
 .admin-tab[data-view="users"].active { background: var(--blue); border-color: var(--blue); }
+.admin-tab[data-view="teams"].active { background: var(--gold); border-color: var(--gold); color: var(--ink); }
 .admin-tab[data-view="predictions"].active { background: var(--green); border-color: var(--green); }
 .admin-tab[data-view="stats"].active { background: var(--red); border-color: var(--red); }
 .admin-tab[data-view="results"].active {
@@ -569,10 +620,174 @@ input.invalid {
   overflow: hidden;
 }
 
+.admin-team-list {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.admin-team {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.admin-team-heading {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--subtle);
+}
+
+.admin-team-rename {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.admin-team-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-team-meta span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-team-meta strong {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.admin-team-members {
+  min-width: 680px;
+}
+
 .leaderboard-main {
   max-width: 1120px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.teams-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.team-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.team-action-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.team-action-form label {
+  min-width: 0;
+}
+
+.teams-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.teams-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.team-list {
+  display: grid;
+}
+
+.team-item {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.team-item:last-child {
+  border-bottom: 0;
+}
+
+.team-item.active {
+  background: var(--subtle);
+  box-shadow: inset 4px 0 var(--blue);
+}
+
+.team-open {
+  min-height: 0;
+  justify-content: space-between;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.team-open:hover {
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+}
+
+.team-open span,
+.team-code span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.team-code {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.team-code span {
+  grid-column: 1 / -1;
+}
+
+.team-code strong {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0;
+}
+
+.team-code .copy-code,
+.remove-team {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.team-standings {
+  min-width: 0;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 20px;
+  color: var(--muted);
 }
 
 .leaderboard-panel {
@@ -1101,6 +1316,14 @@ body[data-auth-mode="register"] .eyebrow {
 }
 
 @media (max-width: 980px) {
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .topbar-right {
+    flex-wrap: wrap;
+  }
+
   .auth-form,
   .controls {
     grid-template-columns: 1fr;
@@ -1141,6 +1364,14 @@ body[data-auth-mode="register"] .eyebrow {
     grid-template-columns: 1fr;
   }
 
+  .teams-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-team-heading {
+    grid-template-columns: 1fr;
+  }
+
   .metrics-chart-wide {
     grid-column: auto;
   }
@@ -1152,9 +1383,58 @@ body[data-auth-mode="register"] .eyebrow {
     flex-direction: column;
   }
 
-  .session {
+  .topbar-right,
+  .page-nav,
+  .session,
+  .utility-actions {
     width: 100%;
-    justify-content: space-between;
+  }
+
+  .topbar-right {
+    gap: 10px;
+  }
+
+  .page-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-header .page-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nav-link {
+    min-width: 0;
+    padding: 0 8px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    white-space: normal;
+    text-align: center;
+  }
+
+  .page-nav .nav-link:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .admin-header .page-nav .nav-link:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .admin-header .page-nav .nav-link:nth-child(3) {
+    border-right: 1px solid var(--line);
+  }
+
+  .session {
+    justify-content: flex-end;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .utility-actions {
+    justify-content: flex-end;
+    padding: 10px 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .auth-shell {
@@ -1176,6 +1456,20 @@ body[data-auth-mode="register"] .eyebrow {
 
   .control-fields {
     grid-template-columns: 1fr;
+  }
+
+  .team-actions,
+  .team-action-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-team-rename {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-team-meta {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .clear-filters {

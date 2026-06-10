@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>My Teams - World Cup Predictor</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </a>
+        <div class="topbar-right">
+          <div class="page-nav" aria-label="Pages">
+            <a class="nav-link" href="index.html">Predictions</a>
+            <a class="nav-link" href="leaderboard.html">Leaderboard</a>
+            <a class="nav-link active" href="teams.html" aria-current="page">My teams</a>
+          </div>
+          <div class="session header-session">
+            <a class="ghost-link header-login hidden" href="login.html">Log in</a>
+            <button class="ghost header-logout hidden" type="button">Log out</button>
+          </div>
+        </div>
+      </nav>
+      <section class="hero-content">
+        <p class="eyebrow">Private standings</p>
+        <h1>My teams</h1>
+        <p class="lede">Create a group or join one with an invite code.</p>
+      </section>
+    </header>
+
+    <main class="teams-main">
+      <section class="team-actions" aria-label="Team actions">
+        <form id="createTeamForm" class="team-action-form">
+          <label>
+            <span>Team name</span>
+            <input id="teamName" maxlength="40" placeholder="Friends league">
+          </label>
+          <button type="submit">Create team</button>
+        </form>
+        <form id="joinTeamForm" class="team-action-form">
+          <label>
+            <span>Invite code</span>
+            <input id="inviteCode" maxlength="10" placeholder="A1B2C3D4E5" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="submit">Join team</button>
+        </form>
+      </section>
+
+      <p id="teamsMessage" class="form-message" role="status"></p>
+
+      <div class="teams-layout">
+        <section class="teams-panel">
+          <div class="panel-title">
+            <h2>Your teams</h2>
+            <span id="teamCount">0 teams</span>
+          </div>
+          <div id="teamList" class="team-list"></div>
+        </section>
+
+        <section id="teamStandingsPanel" class="leaderboard-panel team-standings hidden">
+          <div class="panel-title">
+            <div>
+              <h2 id="teamStandingsTitle">Team standings</h2>
+              <span id="teamStandingsMeta"></span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="leaderboard-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Points</th>
+                  <th>Exact scores</th>
+                  <th>Correct results</th>
+                  <th>Graded</th>
+                </tr>
+              </thead>
+              <tbody id="teamLeaderboardRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="nav-session.js"></script>
+    <script src="teams.js"></script>
+  </body>
+</html>

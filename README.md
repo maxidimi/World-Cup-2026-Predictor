@@ -14,6 +14,7 @@ For a complete public Azure deployment procedure, see [Azure deployment](docs/AZ
 - Sync available fixtures and scores from football-data.org when `FOOTBALL_DATA_TOKEN` is configured.
 - Save user predictions before kickoff only.
 - View a public leaderboard with 3 points for an exact score and 1 point for the correct 1/X/2 result.
+- Create private teams, invite other users by code, and view team-only leaderboards.
 - Admin dashboard for users, predictions, vote stats, result stats, and manual prediction/result edits.
 - Admin access controlled by the `isAdmin` flag in MongoDB.
 - Local password reset flow.
@@ -189,6 +190,7 @@ POST /api/admin/sync-results
 - `results`: official or admin-entered match scores.
 - `matches`: stored fixtures shown by the app.
 - `passwordResets`: local password reset tokens.
+- `teams`: private prediction groups, invite codes, owners, and members.
 
 ## Security Notes
 

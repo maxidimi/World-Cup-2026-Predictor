@@ -107,6 +107,18 @@ function filteredUsers() {
   return adminState.overview.users.filter((user) => !query || searchableUser(user).includes(query));
 }
 
+function filteredTeams() {
+  const query = adminState.search.trim().toLowerCase();
+  return adminState.overview.teams.filter((team) => !query || [
+    team.name,
+    team.inviteCode,
+    team.owner.nickname,
+    team.owner.name,
+    team.owner.email,
+    ...team.members.flatMap((member) => [member.nickname, member.name, member.email])
+  ].join(" ").toLowerCase().includes(query));
+}
+
 function filteredPredictions() {
   const query = adminState.search.trim().toLowerCase();
   return adminState.overview.predictions.filter((prediction) => {
@@ -167,6 +179,64 @@ function renderUsers() {
       renderUserDetail();
     });
   });
+}
+
+function renderTeams() {
+  const teams = filteredTeams();
+  $("#teamsPanelCount").textContent = `${teams.length} ${teams.length === 1 ? "team" : "teams"}`;
+  $("#adminTeamList").innerHTML = teams.map((team) => `
+    <article class="admin-team">
+      <div class="admin-team-heading">
+        <form class="admin-team-rename" data-team-id="${escapeHtml(team.id)}">
+          <label>
+            <span>Team name</span>
+            <input name="name" maxlength="40" value="${escapeHtml(team.name)}">
+          </label>
+          <button type="submit">Save name</button>
+        </form>
+        <div class="admin-team-meta">
+          <span>Invite code</span>
+          <strong>${escapeHtml(team.inviteCode)}</strong>
+          <span>${team.members.length} ${team.members.length === 1 ? "member" : "members"}</span>
+          <button class="ghost delete-admin-team" data-team-id="${escapeHtml(team.id)}" data-team-name="${escapeHtml(team.name)}" type="button">Delete team</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="admin-team-members">
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Role</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${team.members.map((member) => {
+              const isOwner = member.id === team.owner.id;
+              return `
+                <tr>
+                  <td>
+                    <strong>${escapeHtml(member.nickname)}</strong>
+                    <span>${escapeHtml(member.name)} - ${escapeHtml(member.email)}</span>
+                  </td>
+                  <td><strong>${isOwner ? "Owner" : "Member"}</strong></td>
+                  <td>
+                    ${isOwner
+                      ? `<span>Owner cannot be removed</span>`
+                      : `<button class="ghost remove-admin-team-member" data-team-id="${escapeHtml(team.id)}" data-member-id="${escapeHtml(member.id)}" data-member-name="${escapeHtml(member.nickname)}" type="button">Remove</button>`}
+                  </td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  `).join("") || `<p class="empty-state">No teams match the current search.</p>`;
+
+  $$(".admin-team-rename").forEach((form) => form.addEventListener("submit", handleRenameTeam));
+  $$(".delete-admin-team").forEach((button) => button.addEventListener("click", handleDeleteTeam));
+  $$(".remove-admin-team-member").forEach((button) => button.addEventListener("click", handleRemoveTeamMember));
 }
 
 function renderUserDetail() {
@@ -334,17 +404,69 @@ function render() {
   renderSummary();
   renderFilters();
   renderUsers();
+  renderTeams();
   renderPredictions();
   renderStats();
   renderResults();
   renderMetrics();
   $$(".admin-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === adminState.view));
   $("#usersPanel").classList.toggle("hidden", adminState.view !== "users");
+  $("#teamsPanel").classList.toggle("hidden", adminState.view !== "teams");
   $("#predictionPanel").classList.toggle("hidden", adminState.view !== "predictions");
   $("#statsPanel").classList.toggle("hidden", adminState.view !== "stats");
   $("#resultsPanel").classList.toggle("hidden", adminState.view !== "results");
   $("#metricsPanel").classList.toggle("hidden", adminState.view !== "metrics");
   if (adminState.view !== "users") $("#userDetailPanel").classList.add("hidden");
+}
+
+async function handleRenameTeam(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button");
+  const name = form.elements.name.value.trim();
+  try {
+    button.disabled = true;
+    const data = await api(`/api/admin/teams/${form.dataset.teamId}`, {
+      method: "PUT",
+      body: JSON.stringify({ name })
+    });
+    $("#adminMessage").textContent = data.message;
+    await loadOverview();
+  } catch (error) {
+    $("#adminMessage").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleDeleteTeam(event) {
+  const button = event.currentTarget;
+  if (!window.confirm(`Delete ${button.dataset.teamName}? This removes the team for every member.`)) return;
+  try {
+    button.disabled = true;
+    const data = await api(`/api/admin/teams/${button.dataset.teamId}`, { method: "DELETE" });
+    $("#adminMessage").textContent = data.message;
+    await loadOverview();
+  } catch (error) {
+    $("#adminMessage").textContent = error.message;
+    button.disabled = false;
+  }
+}
+
+async function handleRemoveTeamMember(event) {
+  const button = event.currentTarget;
+  if (!window.confirm(`Remove ${button.dataset.memberName} from this team?`)) return;
+  try {
+    button.disabled = true;
+    const data = await api(`/api/admin/teams/${button.dataset.teamId}/members/${button.dataset.memberId}`, {
+      method: "DELETE"
+    });
+    $("#adminMessage").textContent = data.message;
+    await loadOverview();
+  } catch (error) {
+    $("#adminMessage").textContent = error.message;
+    button.disabled = false;
+  }
 }
 
 function readScores(form) {
@@ -432,10 +554,6 @@ async function loadMetrics() {
 }
 
 function bindEvents() {
-  $("#refreshBtn").addEventListener("click", async () => {
-    await loadOverview();
-    if (adminState.view === "metrics") await loadMetrics();
-  });
   $("#adminSearch").addEventListener("input", (event) => {
     adminState.search = event.target.value;
     render();

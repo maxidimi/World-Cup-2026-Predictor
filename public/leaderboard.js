@@ -1,6 +1,5 @@
 const rows = document.querySelector("#leaderboardRows");
 const message = document.querySelector("#leaderboardMessage");
-const refreshButton = document.querySelector("#refreshLeaderboard");
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -29,7 +28,6 @@ function renderLeaderboard(leaderboard) {
 }
 
 async function loadLeaderboard() {
-  refreshButton.disabled = true;
   message.textContent = "Loading standings...";
   try {
     const response = await fetch("/api/leaderboard");
@@ -39,10 +37,7 @@ async function loadLeaderboard() {
     message.textContent = "";
   } catch (error) {
     message.textContent = error.message;
-  } finally {
-    refreshButton.disabled = false;
   }
 }
 
-refreshButton.addEventListener("click", loadLeaderboard);
 loadLeaderboard();

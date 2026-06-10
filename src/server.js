@@ -30,6 +30,9 @@ const publicFiles = new Set([
   "app.js",
   "leaderboard.html",
   "leaderboard.js",
+  "teams.html",
+  "teams.js",
+  "nav-session.js",
   "login.html",
   "register.html",
   "auth.js",
@@ -95,6 +98,8 @@ function getDb() {
       await db.collection("matches").createIndex({ providerMatchId: 1 }, { sparse: true });
       await db.collection("passwordResets").createIndex({ tokenHash: 1 }, { unique: true });
       await db.collection("passwordResets").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+      await db.collection("teams").createIndex({ inviteCode: 1 }, { unique: true });
+      await db.collection("teams").createIndex({ members: 1 });
       return db;
     }).catch(async (error) => {
       dbPromise = undefined;
@@ -123,6 +128,10 @@ function normalizeMetricRoute(pathname) {
   if (pathname.startsWith("/api/predictions/")) return "/api/predictions/:matchId";
   if (pathname.startsWith("/api/admin/predictions/")) return "/api/admin/predictions/:predictionId";
   if (pathname.startsWith("/api/admin/results/")) return "/api/admin/results/:matchId";
+  if (/^\/api\/admin\/teams\/[^/]+\/members\/[^/]+$/.test(pathname)) return "/api/admin/teams/:teamId/members/:memberId";
+  if (/^\/api\/admin\/teams\/[^/]+$/.test(pathname)) return "/api/admin/teams/:teamId";
+  if (/^\/api\/teams\/[^/]+\/leaderboard$/.test(pathname)) return "/api/teams/:teamId/leaderboard";
+  if (/^\/api\/teams\/[^/]+$/.test(pathname)) return "/api/teams/:teamId";
   if (pathname.startsWith("/assets/")) return "/assets/:file";
   return pathname === "/" ? "/" : pathname;
 }
@@ -376,7 +385,7 @@ async function ensureUserNicknames(db) {
       { nickname: { $exists: false } },
       { nicknameKey: { $exists: false } }
     ]
-  }).sort({ createdAt: 1, _id: 1 }).toArray();
+  }).toArray();
 
   for (const user of missing) {
     const base = nicknameBase(user);
@@ -693,11 +702,13 @@ function finalizeAccuracy(accuracy) {
   };
 }
 
-async function buildLeaderboard() {
+async function buildLeaderboard(userIds = null) {
   const db = await getDb();
+  const userFilter = userIds ? { _id: { $in: userIds } } : {};
+  const predictionFilter = userIds ? { userId: { $in: userIds } } : {};
   const [users, predictions, results] = await Promise.all([
-    db.collection("users").find({}, { projection: { nickname: 1 } }).toArray(),
-    db.collection("predictions").find({}).toArray(),
+    db.collection("users").find(userFilter, { projection: { nickname: 1 } }).toArray(),
+    db.collection("predictions").find(predictionFilter).toArray(),
     db.collection("results").find({}).toArray()
   ]);
   const resultMap = new Map(results.map((result) => [result.matchId, result]));
@@ -745,6 +756,42 @@ async function buildLeaderboard() {
   return rows;
 }
 
+function normalizeTeamName(name) {
+  return String(name || "").trim().replace(/\s+/g, " ");
+}
+
+function isCompatibleTeamName(name) {
+  const normalized = normalizeTeamName(name);
+  return normalized.length >= 3 && normalized.length <= 40 && !/[<>{}]/.test(normalized);
+}
+
+function normalizeInviteCode(code) {
+  return String(code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function generateInviteCode() {
+  return crypto.randomBytes(5).toString("hex").toUpperCase();
+}
+
+function publicTeam(team, userId) {
+  return {
+    id: String(team._id),
+    name: team.name,
+    inviteCode: team.inviteCode,
+    memberCount: team.members.length,
+    isOwner: String(team.ownerId) === String(userId),
+    createdAt: team.createdAt
+  };
+}
+
+async function getTeamForMember(db, teamId, userId) {
+  if (!ObjectId.isValid(teamId)) return null;
+  return db.collection("teams").findOne({
+    _id: new ObjectId(teamId),
+    members: userId
+  });
+}
+
 async function buildAdminOverview() {
   const db = await getDb();
   try {
@@ -759,6 +806,7 @@ async function buildAdminOverview() {
     .toArray();
   const predictions = await db.collection("predictions").find({}).sort({ updatedAt: -1 }).toArray();
   const results = await db.collection("results").find({}).toArray();
+  const teams = await db.collection("teams").find({}).sort({ createdAt: -1 }).toArray();
   const userMap = new Map(users.map((user) => [String(user._id), publicUser(user)]));
   const matchMap = new Map(matches.map((match) => [match.id, match]));
   const resultMap = new Map(results.map((result) => [result.matchId, result]));
@@ -833,10 +881,30 @@ async function buildAdminOverview() {
       away: result.away,
       updatedAt: result.updatedAt
     })),
+    teams: teams.map((team) => ({
+      id: String(team._id),
+      name: team.name,
+      inviteCode: team.inviteCode,
+      owner: userMap.get(String(team.ownerId)) || {
+        id: String(team.ownerId),
+        nickname: "Deleted user",
+        name: "Deleted user",
+        email: ""
+      },
+      members: team.members.map((memberId) => userMap.get(String(memberId)) || {
+        id: String(memberId),
+        nickname: "Deleted user",
+        name: "Deleted user",
+        email: ""
+      }),
+      createdAt: team.createdAt,
+      updatedAt: team.updatedAt
+    })),
     stats,
     totals: {
       users: users.length,
       predictions: predictions.length,
+      teams: teams.length,
       matchesWithVotes: stats.filter((stat) => stat.predictionCount > 0).length,
       completedResults: results.length
     }
@@ -872,6 +940,147 @@ async function handleApi(request, response, url) {
         },
         leaderboard: await buildLeaderboard()
       });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/teams") {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to view your teams." });
+        return;
+      }
+      const db = await getDb();
+      const teams = await db.collection("teams")
+        .find({ members: user._id })
+        .sort({ createdAt: -1 })
+        .toArray();
+      sendJson(response, 200, { teams: teams.map((team) => publicTeam(team, user._id)) });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/teams") {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to create a team." });
+        return;
+      }
+      const body = await readBody(request);
+      const name = normalizeTeamName(body.name);
+      if (!isCompatibleTeamName(name)) {
+        sendJson(response, 400, { error: "Team name must be 3-40 characters." });
+        return;
+      }
+      const db = await getDb();
+      if (await db.collection("teams").countDocuments({ ownerId: user._id }) >= 10) {
+        sendJson(response, 409, { error: "You can create up to 10 teams." });
+        return;
+      }
+      let team;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        team = {
+          name,
+          inviteCode: generateInviteCode(),
+          ownerId: user._id,
+          members: [user._id],
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        try {
+          const result = await db.collection("teams").insertOne(team);
+          team._id = result.insertedId;
+          break;
+        } catch (error) {
+          if (error.code !== 11000 || attempt === 4) throw error;
+          team = null;
+        }
+      }
+      sendJson(response, 201, { team: publicTeam(team, user._id) });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/teams/join") {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to join a team." });
+        return;
+      }
+      const body = await readBody(request);
+      const inviteCode = normalizeInviteCode(body.inviteCode);
+      if (inviteCode.length !== 10) {
+        sendJson(response, 400, { error: "Enter a valid 10-character invite code." });
+        return;
+      }
+      const db = await getDb();
+      const existingTeam = await db.collection("teams").findOne({ inviteCode });
+      if (!existingTeam) {
+        sendJson(response, 404, { error: "No team was found for that invite code." });
+        return;
+      }
+      if (existingTeam.members.some((memberId) => String(memberId) === String(user._id))) {
+        sendJson(response, 409, { error: `You are already a member of ${existingTeam.name}.` });
+        return;
+      }
+      if (await db.collection("teams").countDocuments({ members: user._id }) >= 25) {
+        sendJson(response, 409, { error: "You can join up to 25 teams." });
+        return;
+      }
+      const team = await db.collection("teams").findOneAndUpdate(
+        { _id: existingTeam._id, members: { $ne: user._id } },
+        { $addToSet: { members: user._id }, $set: { updatedAt: new Date() } },
+        { returnDocument: "after" }
+      );
+      if (!team) {
+        sendJson(response, 409, { error: `You are already a member of ${existingTeam.name}.` });
+        return;
+      }
+      sendJson(response, 200, { team: publicTeam(team, user._id) });
+      return;
+    }
+
+    const teamLeaderboardMatch = url.pathname.match(/^\/api\/teams\/([^/]+)\/leaderboard$/);
+    if (request.method === "GET" && teamLeaderboardMatch) {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to view team standings." });
+        return;
+      }
+      const db = await getDb();
+      const team = await getTeamForMember(db, teamLeaderboardMatch[1], user._id);
+      if (!team) {
+        sendJson(response, 404, { error: "Team not found or you are not a member." });
+        return;
+      }
+      sendJson(response, 200, {
+        team: publicTeam(team, user._id),
+        scoring: { exactScore: 3, correctResult: 1 },
+        leaderboard: await buildLeaderboard(team.members)
+      });
+      return;
+    }
+
+    const teamMembershipMatch = url.pathname.match(/^\/api\/teams\/([^/]+)$/);
+    if (request.method === "DELETE" && teamMembershipMatch) {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to manage team membership." });
+        return;
+      }
+      const db = await getDb();
+      const team = await getTeamForMember(db, teamMembershipMatch[1], user._id);
+      if (!team) {
+        sendJson(response, 404, { error: "Team not found or you are not a member." });
+        return;
+      }
+      if (String(team.ownerId) === String(user._id)) {
+        await db.collection("teams").deleteOne({ _id: team._id, ownerId: user._id });
+        sendJson(response, 200, { message: "Team deleted." });
+      } else {
+        await db.collection("teams").updateOne(
+          { _id: team._id },
+          { $pull: { members: user._id }, $set: { updatedAt: new Date() } }
+        );
+        sendJson(response, 200, { message: "You left the team." });
+      }
       return;
     }
 
@@ -1073,6 +1282,75 @@ async function handleApi(request, response, url) {
       return;
     }
 
+    const adminTeamMatch = url.pathname.match(/^\/api\/admin\/teams\/([^/]+)$/);
+    if (request.method === "PUT" && adminTeamMatch) {
+      if (!await requireAdmin(request, response)) return;
+      if (!ObjectId.isValid(adminTeamMatch[1])) {
+        sendJson(response, 404, { error: "Team not found." });
+        return;
+      }
+      const body = await readBody(request);
+      const name = normalizeTeamName(body.name);
+      if (!isCompatibleTeamName(name)) {
+        sendJson(response, 400, { error: "Team name must be 3-40 characters." });
+        return;
+      }
+      const db = await getDb();
+      const team = await db.collection("teams").findOneAndUpdate(
+        { _id: new ObjectId(adminTeamMatch[1]) },
+        { $set: { name, updatedAt: new Date(), editedByAdmin: true } },
+        { returnDocument: "after" }
+      );
+      if (!team) {
+        sendJson(response, 404, { error: "Team not found." });
+        return;
+      }
+      sendJson(response, 200, { message: "Team renamed." });
+      return;
+    }
+
+    if (request.method === "DELETE" && adminTeamMatch) {
+      if (!await requireAdmin(request, response)) return;
+      if (!ObjectId.isValid(adminTeamMatch[1])) {
+        sendJson(response, 404, { error: "Team not found." });
+        return;
+      }
+      const db = await getDb();
+      const result = await db.collection("teams").deleteOne({ _id: new ObjectId(adminTeamMatch[1]) });
+      if (!result.deletedCount) {
+        sendJson(response, 404, { error: "Team not found." });
+        return;
+      }
+      sendJson(response, 200, { message: "Team deleted." });
+      return;
+    }
+
+    const adminTeamMemberMatch = url.pathname.match(/^\/api\/admin\/teams\/([^/]+)\/members\/([^/]+)$/);
+    if (request.method === "DELETE" && adminTeamMemberMatch) {
+      if (!await requireAdmin(request, response)) return;
+      const [teamId, memberId] = adminTeamMemberMatch.slice(1);
+      if (!ObjectId.isValid(teamId) || !ObjectId.isValid(memberId)) {
+        sendJson(response, 404, { error: "Team or member not found." });
+        return;
+      }
+      const db = await getDb();
+      const team = await db.collection("teams").findOne({ _id: new ObjectId(teamId) });
+      if (!team || !team.members.some((id) => String(id) === memberId)) {
+        sendJson(response, 404, { error: "Team or member not found." });
+        return;
+      }
+      if (String(team.ownerId) === memberId) {
+        sendJson(response, 409, { error: "The team owner cannot be removed. Delete the team instead." });
+        return;
+      }
+      await db.collection("teams").updateOne(
+        { _id: team._id },
+        { $pull: { members: new ObjectId(memberId) }, $set: { updatedAt: new Date(), editedByAdmin: true } }
+      );
+      sendJson(response, 200, { message: "Member removed from team." });
+      return;
+    }
+
     if (request.method === "PUT" && url.pathname.startsWith("/api/admin/predictions/")) {
       if (!await requireAdmin(request, response)) return;
       const predictionId = url.pathname.split("/").pop();
@@ -1157,7 +1435,10 @@ const server = http.createServer((request, response) => {
     getDb()
       .then((db) => db.command({ ping: 1 }))
       .then(() => sendJson(response, 200, { status: "ready" }))
-      .catch(() => sendJson(response, 503, { status: "unavailable" }));
+      .catch((error) => {
+        console.error("Readiness check failed:", error.message);
+        sendJson(response, 503, { status: "unavailable" });
+      });
     return;
   }
 

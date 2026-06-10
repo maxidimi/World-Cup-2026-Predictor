@@ -14,9 +14,16 @@
           <span class="brand-mark" aria-hidden="true">WC</span>
           <span>World Cup Predictor</span>
         </a>
-        <div class="session">
-          <a class="nav-link" href="index.html">Predictions</a>
-          <button id="refreshLeaderboard" class="ghost" type="button">Refresh</button>
+        <div class="topbar-right">
+          <div class="page-nav" aria-label="Pages">
+            <a class="nav-link" href="index.html">Predictions</a>
+            <a class="nav-link active" href="leaderboard.html" aria-current="page">Leaderboard</a>
+            <a class="nav-link" href="teams.html">My teams</a>
+          </div>
+          <div class="session header-session">
+            <a class="ghost-link header-login hidden" href="login.html">Log in</a>
+            <button class="ghost header-logout hidden" type="button">Log out</button>
+          </div>
         </div>
       </nav>
       <section class="hero-content">
@@ -62,6 +69,7 @@
       </section>
     </main>
 
+    <script src="nav-session.js"></script>
     <script src="leaderboard.js"></script>
   </body>
 </html>

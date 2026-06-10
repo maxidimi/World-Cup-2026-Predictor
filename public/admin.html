@@ -14,10 +14,17 @@
           <span class="brand-mark" aria-hidden="true">WC</span>
           <span>World Cup Predictor</span>
         </a>
-        <div class="session">
-          <a class="nav-link" href="leaderboard.html">Leaderboard</a>
-          <a class="nav-link" href="index.html">Prediction app</a>
-          <button id="refreshBtn" class="ghost" type="button">Refresh</button>
+        <div class="topbar-right">
+          <div class="page-nav" aria-label="Pages">
+            <a class="nav-link" href="index.html">Predictions</a>
+            <a class="nav-link" href="leaderboard.html">Leaderboard</a>
+            <a class="nav-link" href="teams.html">My teams</a>
+            <span class="nav-link active" aria-current="page">Admin</span>
+          </div>
+          <div class="session header-session">
+            <a class="ghost-link header-login hidden" href="login.html">Log in</a>
+            <button class="ghost header-logout hidden" type="button">Log out</button>
+          </div>
         </div>
       </nav>
       <section class="admin-title">
@@ -46,6 +53,7 @@
       <section class="controls admin-controls" aria-label="Admin filters">
         <div class="admin-menu" role="tablist" aria-label="Admin pages">
           <button class="admin-tab active" data-view="users" type="button">Users</button>
+          <button class="admin-tab" data-view="teams" type="button">Teams</button>
           <button class="admin-tab" data-view="predictions" type="button">Predictions</button>
           <button class="admin-tab" data-view="stats" type="button">Game stats</button>
           <button class="admin-tab" data-view="results" type="button">Results</button>
@@ -87,6 +95,14 @@
             <tbody id="userRows"></tbody>
           </table>
         </div>
+      </section>
+
+      <section id="teamsPanel" class="admin-panel hidden">
+        <div class="panel-title">
+          <h2>All Teams</h2>
+          <span id="teamsPanelCount">0 teams</span>
+        </div>
+        <div id="adminTeamList" class="admin-team-list"></div>
       </section>
 
       <section id="userDetailPanel" class="admin-panel hidden">
@@ -209,6 +225,7 @@
       </section>
     </main>
 
+    <script src="nav-session.js"></script>
     <script src="admin.js"></script>
   </body>
 </html>

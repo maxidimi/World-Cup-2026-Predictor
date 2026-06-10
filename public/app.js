@@ -290,8 +290,6 @@ function renderCard(match, prediction) {
 
 function renderAuth() {
   const loggedIn = Boolean(state.currentUser);
-  const user = state.currentUser;
-  $("#sessionName").textContent = loggedIn ? `Signed in as ${user.nickname || user.name || user.email}` : "";
   $("#guestActions").classList.toggle("hidden", loggedIn);
   $("#logoutBtn").classList.toggle("hidden", !loggedIn);
 }

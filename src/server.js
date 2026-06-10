@@ -90,16 +90,20 @@ function getDb() {
       const db = mongoClient.db(dbName);
       await db.collection("users").createIndex({ email: 1 }, { unique: true });
       await db.collection("users").createIndex({ nicknameKey: 1 }, { unique: true, sparse: true });
+      await db.collection("users").createIndex({ createdAt: -1 });
       await ensureUserNicknames(db);
       await db.collection("predictions").createIndex({ userId: 1, matchId: 1 }, { unique: true });
       await db.collection("predictions").createIndex({ matchId: 1 });
+      await db.collection("predictions").createIndex({ updatedAt: -1 });
       await db.collection("results").createIndex({ matchId: 1 }, { unique: true });
       await db.collection("matches").createIndex({ id: 1 }, { unique: true });
       await db.collection("matches").createIndex({ providerMatchId: 1 }, { sparse: true });
+      await db.collection("matches").createIndex({ kickoffUtc: 1, id: 1 });
       await db.collection("passwordResets").createIndex({ tokenHash: 1 }, { unique: true });
       await db.collection("passwordResets").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
       await db.collection("teams").createIndex({ inviteCode: 1 }, { unique: true });
       await db.collection("teams").createIndex({ members: 1 });
+      await db.collection("teams").createIndex({ createdAt: -1 });
       return db;
     }).catch(async (error) => {
       dbPromise = undefined;

@@ -1360,6 +1360,113 @@ input.invalid {
   background: var(--panel);
 }
 
+.leaderboard-search {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 360px);
+  align-items: center;
+  justify-content: end;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.leaderboard-search label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.leaderboard-search input {
+  width: 100%;
+}
+
+.player-link {
+  color: var(--blue);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.player-link:hover {
+  text-decoration: underline;
+}
+
+.public-predictions-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.prediction-view-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 20px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.prediction-view-tab {
+  min-height: 54px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--panel);
+  color: var(--muted);
+}
+
+.prediction-view-tab:last-child {
+  border-right: 0;
+}
+
+.prediction-view-tab.active {
+  background: var(--blue);
+  color: white;
+}
+
+.player-prediction-view {
+  min-width: 0;
+}
+
+.public-group-ranking {
+  display: grid;
+  padding: 8px 12px;
+}
+
+.public-group-ranking > div {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  border-bottom: 1px solid var(--line);
+}
+
+.public-group-ranking > div:last-child {
+  border-bottom: 0;
+}
+
+.public-group-ranking span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.public-group-ranking em {
+  color: var(--green);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.public-bracket-team {
+  cursor: default;
+}
+
+.bracket-board > .empty-state {
+  grid-column: 1 / -1;
+}
+
 .leaderboard-table {
   min-width: 680px;
 }
@@ -2076,6 +2183,23 @@ body[data-auth-mode="register"] .eyebrow {
 
   .profile-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .leaderboard-search {
+    grid-template-columns: 1fr;
+  }
+
+  .prediction-view-switcher {
+    grid-template-columns: 1fr;
+  }
+
+  .prediction-view-tab {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .prediction-view-tab:last-child {
+    border-bottom: 0;
   }
 
   .section-heading {

@@ -72,7 +72,7 @@ function renderLeaderboard(data) {
   document.querySelector("#teamLeaderboardRows").innerHTML = data.leaderboard.map((user) => `
     <tr class="${user.rank <= 3 ? `rank-${user.rank}` : ""}">
       <td><strong class="rank-number">${user.rank}</strong></td>
-      <td><strong>${escapeHtml(user.nickname)}</strong></td>
+      <td><a class="player-link" href="player-predictions.html?nickname=${encodeURIComponent(user.nickname)}">${escapeHtml(user.nickname)}</a></td>
       <td><strong class="points">${user.points}</strong></td>
       <td><strong>${user.exactScoreHits}</strong></td>
       <td><strong>${user.resultHits}</strong></td>

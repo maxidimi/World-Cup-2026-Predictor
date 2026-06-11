@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Player Predictions - World Cup Predictor</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+    <script src="theme.js"></script>
+    <script src="i18n.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </a>
+        <div class="topbar-right">
+          <div class="page-nav" aria-label="Pages">
+            <a class="nav-link" href="index.html">Predictions</a>
+            <a class="nav-link" href="bracket.html">Bracket</a>
+            <a class="nav-link active" href="leaderboard.html">Leaderboard</a>
+            <a class="nav-link" href="teams.html">My teams</a>
+          </div>
+          <div class="session header-session">
+            <a class="ghost-link header-profile hidden" href="profile.html">Profile</a>
+            <a class="ghost-link header-login hidden" href="login.html">Log in</a>
+            <button class="ghost header-logout hidden" type="button">Log out</button>
+          </div>
+        </div>
+      </nav>
+      <section class="hero-content profile-heading">
+        <p class="eyebrow">Player predictions</p>
+        <h1 id="playerNickname">Player</h1>
+        <p class="lede">Scores, group standings, and knockout picks.</p>
+      </section>
+    </header>
+
+    <main class="public-predictions-main">
+      <section class="summary profile-summary" aria-label="Prediction summary">
+        <div><strong id="playerPoints">0</strong><span>points</span></div>
+        <div><strong id="playerPredictions">0</strong><span>predictions</span></div>
+        <div><strong id="playerGraded">0</strong><span>graded</span></div>
+        <div><strong id="playerExact">0</strong><span>exact scores</span></div>
+        <div><strong id="playerResults">0</strong><span>correct results</span></div>
+      </section>
+
+      <div class="prediction-view-switcher" role="tablist" aria-label="Prediction type">
+        <button class="prediction-view-tab active" type="button" role="tab" aria-selected="true" data-view="scores">Match scores</button>
+        <button class="prediction-view-tab" type="button" role="tab" aria-selected="false" data-view="groups">Group stage</button>
+        <button class="prediction-view-tab" type="button" role="tab" aria-selected="false" data-view="bracket">Knockout bracket</button>
+      </div>
+
+      <p id="playerPredictionsMessage" class="form-message" role="status">Loading predictions...</p>
+      <section id="scoresView" class="player-prediction-view">
+        <div id="playerScoresList" class="profile-predictions"></div>
+      </section>
+      <section id="groupsView" class="player-prediction-view hidden">
+        <div id="playerGroupGrid" class="group-prediction-grid"></div>
+      </section>
+      <section id="bracketView" class="player-prediction-view hidden">
+        <section id="publicChampionPanel" class="champion-panel hidden">
+          <span>Predicted champion</span>
+          <strong id="publicChampionName"></strong>
+        </section>
+        <div class="bracket-scroll" aria-label="Player knockout bracket">
+          <div id="playerBracketBoard" class="bracket-board"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="nav-session.js"></script>
+    <script src="player-predictions.js"></script>
+  </body>
+</html>

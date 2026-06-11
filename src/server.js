@@ -32,6 +32,8 @@ const publicFiles = new Set([
   "app.js",
   "leaderboard.html",
   "leaderboard.js",
+  "player-predictions.html",
+  "player-predictions.js",
   "bracket.html",
   "bracket.js",
   "profile.html",
@@ -176,6 +178,7 @@ function sendJson(response, status, payload) {
 
 function normalizeMetricRoute(pathname) {
   if (pathname.startsWith("/api/predictions/")) return "/api/predictions/:matchId";
+  if (/^\/api\/users\/[^/]+\/predictions$/.test(pathname)) return "/api/users/:nickname/predictions";
   if (pathname.startsWith("/api/admin/predictions/")) return "/api/admin/predictions/:predictionId";
   if (pathname.startsWith("/api/admin/results/")) return "/api/admin/results/:matchId";
   if (/^\/api\/admin\/teams\/[^/]+\/members\/[^/]+$/.test(pathname)) return "/api/admin/teams/:teamId/members/:memberId";
@@ -837,6 +840,7 @@ async function bracketPayload(userId) {
       locked: kickoffMap.has(match.id) && Date.now() >= new Date(kickoffMap.get(match.id)).getTime()
     })),
     picks: {
+      saved: Boolean(bracket),
       groupRankings,
       thirdPlaceGroups,
       entrants,
@@ -1097,6 +1101,7 @@ async function buildLeaderboard(userIds = null) {
   ]);
   const resultMap = new Map(results.map((result) => [result.matchId, result]));
   const standings = new Map(users.map((user) => [String(user._id), {
+    id: String(user._id),
     nickname: user.nickname,
     points: 0,
     graded: 0,
@@ -1138,6 +1143,48 @@ async function buildLeaderboard(userIds = null) {
     previous = row;
   });
   return rows;
+}
+
+async function predictionHistoryPayload(user) {
+  const db = await getDb();
+  const [matches, predictions, results] = await Promise.all([
+    getMatches(),
+    withMongoRetry(() => db.collection("predictions").find({ userId: user._id }).toArray()),
+    withMongoRetry(() => db.collection("results").find({}).toArray())
+  ]);
+  const matchMap = new Map(matches.map((match) => [match.id, match]));
+  const resultMap = new Map(results.map((result) => [result.matchId, result]));
+  const summary = {
+    totalPredictions: predictions.length,
+    graded: 0,
+    points: 0,
+    exactScoreHits: 0,
+    resultHits: 0
+  };
+  const predictionHistory = predictions.map((prediction) => {
+    const match = matchMap.get(prediction.matchId) || null;
+    const result = resultMap.get(prediction.matchId) || null;
+    const points = result ? predictionPoints(prediction, result) : null;
+    if (result) {
+      summary.graded += 1;
+      summary.points += points;
+      if (points === 3) summary.exactScoreHits += 1;
+      if (points > 0) summary.resultHits += 1;
+    }
+    return {
+      matchId: prediction.matchId,
+      match,
+      prediction: { home: prediction.home, away: prediction.away },
+      result: result ? { home: result.home, away: result.away } : null,
+      points,
+      savedAt: prediction.updatedAt
+    };
+  }).sort((left, right) => {
+    const leftDate = new Date(left.match?.kickoffUtc || left.savedAt || 0).getTime();
+    const rightDate = new Date(right.match?.kickoffUtc || right.savedAt || 0).getTime();
+    return rightDate - leftDate;
+  });
+  return { summary, predictions: predictionHistory };
 }
 
 function normalizeTeamName(name) {
@@ -1337,6 +1384,30 @@ async function handleApi(request, response, url) {
           correctResult: 1
         },
         leaderboard: await buildLeaderboard()
+      });
+      return;
+    }
+
+    const publicPredictionsMatch = url.pathname.match(/^\/api\/users\/([^/]+)\/predictions$/);
+    if (request.method === "GET" && publicPredictionsMatch) {
+      const nickname = decodeURIComponent(publicPredictionsMatch[1]);
+      const db = await getDb();
+      const user = await db.collection("users").findOne(
+        { nicknameKey: nicknameKey(nickname) },
+        { projection: { nickname: 1 } }
+      );
+      if (!user) {
+        sendJson(response, 404, { error: "Player not found." });
+        return;
+      }
+      const [history, bracket] = await Promise.all([
+        predictionHistoryPayload(user),
+        bracketPayload(user._id)
+      ]);
+      sendJson(response, 200, {
+        user: { nickname: user.nickname },
+        ...history,
+        bracket
       });
       return;
     }
@@ -1617,48 +1688,10 @@ async function handleApi(request, response, url) {
         sendJson(response, 401, { error: "Log in to view your profile." });
         return;
       }
-      const db = await getDb();
-      const [matches, predictions, results] = await Promise.all([
-        getMatches(),
-        withMongoRetry(() => db.collection("predictions").find({ userId: user._id }).toArray()),
-        withMongoRetry(() => db.collection("results").find({}).toArray())
-      ]);
-      const matchMap = new Map(matches.map((match) => [match.id, match]));
-      const resultMap = new Map(results.map((result) => [result.matchId, result]));
-      const summary = {
-        totalPredictions: predictions.length,
-        graded: 0,
-        points: 0,
-        exactScoreHits: 0,
-        resultHits: 0
-      };
-      const predictionHistory = predictions.map((prediction) => {
-        const match = matchMap.get(prediction.matchId) || null;
-        const result = resultMap.get(prediction.matchId) || null;
-        const points = result ? predictionPoints(prediction, result) : null;
-        if (result) {
-          summary.graded += 1;
-          summary.points += points;
-          if (points === 3) summary.exactScoreHits += 1;
-          if (points > 0) summary.resultHits += 1;
-        }
-        return {
-          matchId: prediction.matchId,
-          match,
-          prediction: { home: prediction.home, away: prediction.away },
-          result: result ? { home: result.home, away: result.away } : null,
-          points,
-          savedAt: prediction.updatedAt
-        };
-      }).sort((left, right) => {
-        const leftDate = new Date(left.match?.kickoffUtc || left.savedAt || 0).getTime();
-        const rightDate = new Date(right.match?.kickoffUtc || right.savedAt || 0).getTime();
-        return rightDate - leftDate;
-      });
+      const history = await predictionHistoryPayload(user);
       sendJson(response, 200, {
         user: publicUser(user),
-        summary,
-        predictions: predictionHistory
+        ...history
       });
       return;
     }

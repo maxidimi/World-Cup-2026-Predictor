@@ -21,12 +21,14 @@ const types = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".png": "image/png",
+  ".svg": "image/svg+xml",
   ".json": "application/json; charset=utf-8"
 };
 const publicFiles = new Set([
   "index.html",
   "admin.html",
   "admin-error.html",
+  "not-found.html",
   "app.js",
   "leaderboard.html",
   "leaderboard.js",
@@ -2043,14 +2045,13 @@ const server = http.createServer((request, response) => {
   }
 
   let relativePath = decodeURIComponent(url.pathname);
-  if (relativePath === "/") relativePath = "/index.html";
+  if (relativePath === "/") relativePath = "/bracket.html";
   relativePath = relativePath.replace(/^\/+/, "").replace(/\//g, path.sep);
   const normalized = path.normalize(relativePath);
   const isAsset = normalized.startsWith(`assets${path.sep}`) && [".png", ".jpg", ".jpeg", ".webp", ".svg"].includes(path.extname(normalized).toLowerCase());
   const isPublicFile = publicFiles.has(normalized);
   if (normalized.includes("..") || normalized.startsWith(".") || (!isPublicFile && !isAsset)) {
-    response.writeHead(404, securityHeaders());
-    response.end("Not found");
+    serveNotFound(response, request.method);
     return;
   }
 
@@ -2058,14 +2059,25 @@ const server = http.createServer((request, response) => {
 
   fs.readFile(filePath, (error, data) => {
     if (error) {
-      response.writeHead(404, securityHeaders());
-      response.end("Not found");
+      serveNotFound(response, request.method);
       return;
     }
     response.writeHead(200, securityHeaders({ "Content-Type": types[path.extname(filePath)] || "application/octet-stream" }));
     response.end(data);
   });
 });
+
+function serveNotFound(response, method) {
+  fs.readFile(path.join(publicRoot, "not-found.html"), (error, data) => {
+    if (error) {
+      response.writeHead(404, securityHeaders({ "Content-Type": "text/plain; charset=utf-8" }));
+      response.end(method === "HEAD" ? undefined : "Page not found");
+      return;
+    }
+    response.writeHead(404, securityHeaders({ "Content-Type": types[".html"] }));
+    response.end(method === "HEAD" ? undefined : data);
+  });
+}
 
 server.listen(port, host, () => {
   console.log(`World Cup Predictor running at http://${host}:${port}/`);

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#e63946"/>
+  <circle cx="32" cy="27" r="17" fill="#ffffff"/>
+  <path d="M32 15l7 5-3 8h-8l-3-8 7-5z" fill="#1769e0"/>
+  <path d="M15 25l9-5 4 8-6 7-7-3zm34 0l-9-5-4 8 6 7 7-3zM22 43l1-9 9-2 5 8-6 5zm20 0l-5-3 4-8 9 2-1 8z" fill="#00875a"/>
+  <path d="M19 42h26v10H19z" fill="#17202a"/>
+  <text x="32" y="50" fill="#ffffff" font-family="Arial, sans-serif" font-size="10" font-weight="700" text-anchor="middle">WC</text>
+</svg>

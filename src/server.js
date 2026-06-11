@@ -43,6 +43,7 @@ const publicFiles = new Set([
   "register.html",
   "auth.js",
   "theme.js",
+  "i18n.js",
   "admin.js",
   "admin-error.js",
   "forgot-password.html",

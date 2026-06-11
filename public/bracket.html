@@ -30,12 +30,22 @@
       </nav>
       <section class="hero-content">
         <p class="eyebrow">World Cup 2026</p>
-        <h1>Knockout bracket</h1>
-        <p class="lede">Choose the qualifiers, then advance teams through their real tournament path.</p>
+        <h1>Tournament bracket</h1>
+        <p class="lede">Predict each group, choose the best third-place teams, and complete their knockout path.</p>
       </section>
     </header>
 
     <main class="bracket-main">
+      <div class="bracket-view-switcher" role="tablist" aria-label="Prediction stage">
+        <button id="groupStageTab" class="bracket-view-tab active" type="button" role="tab"
+          aria-selected="true" aria-controls="groupStageView" data-bracket-view="groups">
+          Group stage
+        </button>
+        <button id="knockoutTab" class="bracket-view-tab" type="button" role="tab"
+          aria-selected="false" aria-controls="knockoutView" data-bracket-view="knockout">
+          Knockout bracket
+        </button>
+      </div>
       <section class="bracket-toolbar" aria-label="Bracket controls">
         <div>
           <strong id="bracketProgress">0 of 32 winners selected</strong>
@@ -44,13 +54,32 @@
         <button id="saveBracketBtn" type="button">Save bracket</button>
       </section>
       <p id="bracketMessage" class="form-message" role="status">Loading bracket...</p>
-      <section id="championPanel" class="champion-panel hidden" aria-live="polite">
-        <span>Predicted champion</span>
-        <strong id="championName"></strong>
+      <section id="groupStageView" class="bracket-stage-view" role="tabpanel" aria-labelledby="groupStageTab">
+        <section class="group-predictions" aria-labelledby="groupPredictionsTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Group stage</p>
+              <h2 id="groupPredictionsTitle">Predicted standings</h2>
+            </div>
+            <span id="thirdPlaceProgress">0 of 8 third-place qualifiers</span>
+          </div>
+          <div id="groupPredictionGrid" class="group-prediction-grid"></div>
+        </section>
       </section>
-      <div class="bracket-scroll" aria-label="World Cup knockout bracket">
-        <div id="bracketBoard" class="bracket-board"></div>
-      </div>
+
+      <section id="knockoutView" class="bracket-stage-view hidden" role="tabpanel" aria-labelledby="knockoutTab">
+        <section id="championPanel" class="champion-panel hidden" aria-live="polite">
+          <span>Predicted champion</span>
+          <strong id="championName"></strong>
+        </section>
+        <div class="bracket-section-title">
+          <p class="eyebrow">Knockout stage</p>
+          <h2>Predicted path</h2>
+        </div>
+        <div class="bracket-scroll" aria-label="World Cup knockout bracket">
+          <div id="bracketBoard" class="bracket-board"></div>
+        </div>
+      </section>
     </main>
 
     <script src="nav-session.js"></script>

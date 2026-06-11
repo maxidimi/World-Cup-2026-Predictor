@@ -671,6 +671,96 @@ function sanitizeBracketMap(value) {
   ]).filter(([, team]) => team));
 }
 
+function sanitizeGroupRankings(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([group, teams]) => [
+    String(group).toUpperCase(),
+    Array.isArray(teams) ? teams.map((team) => String(team || "").trim().slice(0, 80)).filter(Boolean) : []
+  ]));
+}
+
+function sanitizeThirdPlaceGroups(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((group) => String(group || "").toUpperCase()).filter((group) => /^[A-L]$/.test(group)))];
+}
+
+function defaultGroupRankings(groups) {
+  return Object.fromEntries(Object.entries(groups).map(([group, teams]) => [group, [...teams]]));
+}
+
+function validateGroupPredictions(rankings, thirdPlaceGroups, groups) {
+  for (const [group, teams] of Object.entries(groups)) {
+    const ranking = rankings[group];
+    if (!Array.isArray(ranking) || ranking.length !== teams.length) {
+      throw new Error(`Complete all four positions for Group ${group}.`);
+    }
+    if (new Set(ranking).size !== teams.length || ranking.some((team) => !teams.includes(team))) {
+      throw new Error(`Group ${group} must contain each group team exactly once.`);
+    }
+  }
+  if (thirdPlaceGroups.length > 8) {
+    throw new Error("Select no more than eight third-place qualifiers.");
+  }
+  if (thirdPlaceGroups.some((group) => !rankings[group]?.[2])) {
+    throw new Error("Each third-place qualifier must come from a completed group prediction.");
+  }
+}
+
+function thirdPlaceSlots() {
+  return bracketMatches
+    .filter((match) => match.round === "Round of 32")
+    .flatMap((match) => [["home", match.home], ["away", match.away]]
+      .filter(([, source]) => source.type === "third")
+      .map(([side, source]) => ({ key: `${match.id}.${side}`, groups: source.groups })));
+}
+
+function assignThirdPlaceGroups(selectedGroups) {
+  const slots = thirdPlaceSlots();
+  const orderedGroups = [...selectedGroups].sort((left, right) => {
+    const leftOptions = slots.filter((slot) => slot.groups.includes(left)).length;
+    const rightOptions = slots.filter((slot) => slot.groups.includes(right)).length;
+    return leftOptions - rightOptions || left.localeCompare(right);
+  });
+  const assignment = {};
+  const usedSlots = new Set();
+
+  function assign(index) {
+    if (index === orderedGroups.length) return true;
+    const group = orderedGroups[index];
+    const candidates = slots
+      .filter((slot) => slot.groups.includes(group) && !usedSlots.has(slot.key))
+      .sort((left, right) => left.key.localeCompare(right.key));
+    for (const slot of candidates) {
+      assignment[slot.key] = group;
+      usedSlots.add(slot.key);
+      if (assign(index + 1)) return true;
+      usedSlots.delete(slot.key);
+      delete assignment[slot.key];
+    }
+    return false;
+  }
+
+  if (!assign(0)) {
+    throw new Error("Those third-place groups cannot form a valid Round-of-32 crossing.");
+  }
+  return assignment;
+}
+
+function deriveBracketEntrants(rankings, thirdPlaceGroups) {
+  const entrants = {};
+  for (const match of bracketMatches.filter((item) => item.round === "Round of 32")) {
+    for (const [side, source] of [["home", match.home], ["away", match.away]]) {
+      const key = `${match.id}.${side}`;
+      if (source.type === "group") entrants[key] = rankings[source.group]?.[source.position - 1] || "";
+    }
+  }
+  const thirdAssignments = assignThirdPlaceGroups(thirdPlaceGroups);
+  Object.entries(thirdAssignments).forEach(([key, group]) => {
+    entrants[key] = rankings[group]?.[2] || "";
+  });
+  return entrants;
+}
+
 function validateBracketPicks(entrants, winners, groups) {
   const allowedEntrantKeys = new Set();
   const selectedTeams = new Set();
@@ -717,8 +807,25 @@ async function bracketPayload(userId) {
   const matches = await getMatches();
   const bracket = await db.collection("brackets").findOne({ userId });
   const kickoffMap = new Map(matches.map((match) => [match.id, match.kickoffUtc]));
+  const groups = groupTeamsFromMatches(matches);
+  const groupRankings = bracket?.groupRankings || defaultGroupRankings(groups);
+  const thirdPlaceGroups = bracket?.thirdPlaceGroups || [];
+  const entrants = deriveBracketEntrants(groupRankings, thirdPlaceGroups);
+  const knockoutKickoffs = bracketMatches
+    .map((match) => kickoffMap.get(match.id))
+    .filter(Boolean)
+    .map((kickoff) => new Date(kickoff).getTime());
+  const groupKickoffs = {};
+  matches.forEach((match) => {
+    const group = String(match.phase || "").match(/^GROUP[_ ]([A-L])$/i)?.[1]?.toUpperCase();
+    if (!group || !match.kickoffUtc) return;
+    const kickoff = new Date(match.kickoffUtc).getTime();
+    if (!groupKickoffs[group] || kickoff < groupKickoffs[group]) groupKickoffs[group] = kickoff;
+  });
   return {
-    groups: groupTeamsFromMatches(matches),
+    groups,
+    groupLocks: Object.fromEntries(Object.entries(groupKickoffs).map(([group, kickoff]) => [group, Date.now() >= kickoff])),
+    thirdPlaceLocked: knockoutKickoffs.length > 0 && Date.now() >= Math.min(...knockoutKickoffs),
     matches: bracketMatches.map((match) => ({
       ...match,
       home: { ...match.home, label: bracketSourceLabel(match.home) },
@@ -727,7 +834,9 @@ async function bracketPayload(userId) {
       locked: kickoffMap.has(match.id) && Date.now() >= new Date(kickoffMap.get(match.id)).getTime()
     })),
     picks: {
-      entrants: bracket?.entrants || {},
+      groupRankings,
+      thirdPlaceGroups,
+      entrants,
       winners: bracket?.winners || {},
       updatedAt: bracket?.updatedAt || null
     }
@@ -1568,21 +1677,50 @@ async function handleApi(request, response, url) {
         return;
       }
       const body = await readBody(request);
-      const entrants = sanitizeBracketMap(body.entrants);
+      const groupRankings = sanitizeGroupRankings(body.groupRankings);
+      const thirdPlaceGroups = sanitizeThirdPlaceGroups(body.thirdPlaceGroups);
       const winners = sanitizeBracketMap(body.winners);
       const db = await getDb();
       const matches = await getMatches();
       const groups = groupTeamsFromMatches(matches);
+      let entrants;
       try {
+        validateGroupPredictions(groupRankings, thirdPlaceGroups, groups);
+        entrants = deriveBracketEntrants(groupRankings, thirdPlaceGroups);
         validateBracketPicks(entrants, winners, groups);
       } catch (error) {
         sendJson(response, 400, { error: error.message });
         return;
       }
       const existing = await db.collection("brackets").findOne({ userId: user._id });
-      const existingEntrants = existing?.entrants || {};
+      const existingRankings = existing?.groupRankings || defaultGroupRankings(groups);
+      const existingThirdPlaceGroups = existing?.thirdPlaceGroups || [];
+      const existingEntrants = deriveBracketEntrants(existingRankings, existingThirdPlaceGroups);
       const existingWinners = existing?.winners || {};
       const kickoffMap = new Map(matches.map((match) => [match.id, match.kickoffUtc]));
+      const groupKickoffs = {};
+      matches.forEach((match) => {
+        const group = String(match.phase || "").match(/^GROUP[_ ]([A-L])$/i)?.[1]?.toUpperCase();
+        if (!group || !match.kickoffUtc) return;
+        const kickoff = new Date(match.kickoffUtc).getTime();
+        if (!groupKickoffs[group] || kickoff < groupKickoffs[group]) groupKickoffs[group] = kickoff;
+      });
+      for (const group of Object.keys(groups)) {
+        if (!groupKickoffs[group] || Date.now() < groupKickoffs[group]) continue;
+        if (JSON.stringify(groupRankings[group]) !== JSON.stringify(existingRankings[group])) {
+          sendJson(response, 403, { error: `Group ${group} is locked because its first match has started.` });
+          return;
+        }
+      }
+      const firstKnockoutKickoff = Math.min(...bracketMatches
+        .map((match) => kickoffMap.get(match.id))
+        .filter(Boolean)
+        .map((kickoff) => new Date(kickoff).getTime()));
+      if (Number.isFinite(firstKnockoutKickoff) && Date.now() >= firstKnockoutKickoff &&
+          JSON.stringify([...thirdPlaceGroups].sort()) !== JSON.stringify([...existingThirdPlaceGroups].sort())) {
+        sendJson(response, 403, { error: "Third-place qualifiers are locked because the knockout stage has started." });
+        return;
+      }
       for (const match of bracketMatches) {
         const kickoffUtc = kickoffMap.get(match.id);
         if (!kickoffUtc || Date.now() < new Date(kickoffUtc).getTime()) continue;
@@ -1604,14 +1742,14 @@ async function handleApi(request, response, url) {
       await db.collection("brackets").updateOne(
         { userId: user._id },
         {
-          $set: { userId: user._id, entrants, winners, updatedAt: now },
+          $set: { userId: user._id, groupRankings, thirdPlaceGroups, entrants, winners, updatedAt: now },
           $setOnInsert: { createdAt: now }
         },
         { upsert: true }
       );
       sendJson(response, 200, {
         message: "Bracket saved.",
-        picks: { entrants, winners, updatedAt: now }
+        picks: { groupRankings, thirdPlaceGroups, entrants, winners, updatedAt: now }
       });
       return;
     }

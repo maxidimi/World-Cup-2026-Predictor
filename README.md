@@ -13,6 +13,7 @@ For a complete public Azure deployment procedure, see [Azure deployment](docs/AZ
 - Store matches in MongoDB and render the app from the database.
 - Sync available fixtures and scores from football-data.org when `FOOTBALL_DATA_TOKEN` is configured.
 - Save user predictions before kickoff only.
+- Predict all 12 group standings and automatically populate a valid knockout bracket.
 - View a public leaderboard with 3 points for an exact score and 1 point for the correct 1/X/2 result.
 - Create private teams, invite other users by code, and view team-only leaderboards.
 - Admin dashboard for users, predictions, vote stats, result stats, and manual prediction/result edits.

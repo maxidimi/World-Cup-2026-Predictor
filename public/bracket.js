@@ -2,8 +2,14 @@ const token = localStorage.getItem("wc_auth_token") || "";
 const board = document.querySelector("#bracketBoard");
 const message = document.querySelector("#bracketMessage");
 const saveButton = document.querySelector("#saveBracketBtn");
+const groupGrid = document.querySelector("#groupPredictionGrid");
 const state = {
+  view: "groups",
   groups: {},
+  groupLocks: {},
+  thirdPlaceLocked: false,
+  groupRankings: {},
+  thirdPlaceGroups: [],
   matches: [],
   entrants: {},
   winners: {},
@@ -53,33 +59,57 @@ function participantsFor(match) {
   return [sourceTeam(match.home), sourceTeam(match.away)];
 }
 
-function eligibleTeams(source) {
-  const groups = source.type === "group" ? [source.group] : source.groups;
-  return [...new Set(groups.flatMap((group) => state.groups[group] || []))].sort();
+function thirdPlaceSlots() {
+  return state.matches
+    .filter((match) => match.round === "Round of 32")
+    .flatMap((match) => [["home", match.home], ["away", match.away]]
+      .filter(([, source]) => source.type === "third")
+      .map(([side, source]) => ({ key: `${match.id}.${side}`, groups: source.groups })));
 }
 
-function selectedElsewhere(entryKey, team) {
-  return Object.entries(state.entrants).some(([key, selected]) => key !== entryKey && selected === team);
+function assignThirdPlaceGroups(selectedGroups) {
+  const slots = thirdPlaceSlots();
+  const orderedGroups = [...selectedGroups].sort((left, right) => {
+    const leftOptions = slots.filter((slot) => slot.groups.includes(left)).length;
+    const rightOptions = slots.filter((slot) => slot.groups.includes(right)).length;
+    return leftOptions - rightOptions || left.localeCompare(right);
+  });
+  const assignment = {};
+  const usedSlots = new Set();
+
+  function assign(index) {
+    if (index === orderedGroups.length) return true;
+    const group = orderedGroups[index];
+    const candidates = slots
+      .filter((slot) => slot.groups.includes(group) && !usedSlots.has(slot.key))
+      .sort((left, right) => left.key.localeCompare(right.key));
+    for (const slot of candidates) {
+      assignment[slot.key] = group;
+      usedSlots.add(slot.key);
+      if (assign(index + 1)) return true;
+      usedSlots.delete(slot.key);
+      delete assignment[slot.key];
+    }
+    return false;
+  }
+
+  return assign(0) ? assignment : null;
 }
 
-function teamGroup(team) {
-  return Object.entries(state.groups).find(([, teams]) => teams.includes(team))?.[0] || "";
-}
-
-function sourceForEntryKey(entryKey) {
-  const [matchId, side] = entryKey.split(".");
-  return matchById(matchId)?.[side];
-}
-
-function thirdGroupSelectedElsewhere(entryKey, team) {
-  const source = sourceForEntryKey(entryKey);
-  if (source?.type !== "third") return false;
-  const group = teamGroup(team);
-  return Object.entries(state.entrants).some(([key, selected]) => (
-    key !== entryKey &&
-    sourceForEntryKey(key)?.type === "third" &&
-    teamGroup(selected) === group
-  ));
+function deriveEntrants() {
+  const entrants = {};
+  state.matches.filter((match) => match.round === "Round of 32").forEach((match) => {
+    [["home", match.home], ["away", match.away]].forEach(([side, source]) => {
+      if (source.type === "group") {
+        entrants[`${match.id}.${side}`] = state.groupRankings[source.group]?.[source.position - 1] || "";
+      }
+    });
+  });
+  const thirdAssignments = assignThirdPlaceGroups(state.thirdPlaceGroups) || {};
+  Object.entries(thirdAssignments).forEach(([key, group]) => {
+    entrants[key] = state.groupRankings[group]?.[2] || "";
+  });
+  state.entrants = entrants;
 }
 
 function reconcileWinners() {
@@ -98,23 +128,14 @@ function reconcileWinners() {
   }
 }
 
-function entrantSelect(match, side, source) {
+function entrantDisplay(match, side, source) {
   const key = `${match.id}.${side}`;
   const selected = state.entrants[key] || "";
-  const options = eligibleTeams(source).map((team) => `
-    <option value="${escapeHtml(team)}" ${team === selected ? "selected" : ""}
-      ${selectedElsewhere(key, team) || thirdGroupSelectedElsewhere(key, team) ? "disabled" : ""}>
-      ${escapeHtml(team)}
-    </option>
-  `).join("");
   return `
-    <label class="bracket-entrant">
-      <span>${escapeHtml(source.label)}</span>
-      <select data-entry-key="${key}" ${match.locked ? "disabled" : ""}>
-        <option value="">Select team</option>
-        ${options}
-      </select>
-    </label>
+    <div class="bracket-entrant">
+      <span title="${escapeHtml(source.label)}">${escapeHtml(source.label)}</span>
+      <strong>${escapeHtml(selected || "Waiting for group prediction")}</strong>
+    </div>
   `;
 }
 
@@ -141,8 +162,8 @@ function renderMatch(match, gridRow, span, finalRound = false) {
   }) : "";
   const entrantControls = match.round === "Round of 32" ? `
     <div class="bracket-entrants">
-      ${entrantSelect(match, "home", match.home)}
-      ${entrantSelect(match, "away", match.away)}
+      ${entrantDisplay(match, "home", match.home)}
+      ${entrantDisplay(match, "away", match.away)}
     </div>
   ` : "";
   return `
@@ -163,7 +184,9 @@ function renderMatch(match, gridRow, span, finalRound = false) {
 }
 
 function render() {
+  deriveEntrants();
   reconcileWinners();
+  renderGroups();
   board.innerHTML = roundLayout.map((round) => {
     let row = 1;
     const cards = round.matches.map((matchId) => {
@@ -188,21 +211,96 @@ function render() {
   const champion = state.winners.M104 || "";
   document.querySelector("#championPanel").classList.toggle("hidden", !champion);
   document.querySelector("#championName").textContent = champion;
+  renderView();
 
-  board.querySelectorAll("select[data-entry-key]").forEach((select) => {
-    select.addEventListener("change", () => {
-      if (select.value) state.entrants[select.dataset.entryKey] = select.value;
-      else delete state.entrants[select.dataset.entryKey];
-      message.textContent = "";
-      render();
-    });
-  });
   board.querySelectorAll(".bracket-team[data-team]").forEach((button) => {
     button.addEventListener("click", () => {
       const current = state.winners[button.dataset.matchId];
       if (current === button.dataset.team) delete state.winners[button.dataset.matchId];
       else state.winners[button.dataset.matchId] = button.dataset.team;
       message.textContent = "";
+      render();
+    });
+  });
+}
+
+function renderView() {
+  const groupView = state.view === "groups";
+  document.querySelector("#groupStageView").classList.toggle("hidden", !groupView);
+  document.querySelector("#knockoutView").classList.toggle("hidden", groupView);
+  document.querySelectorAll(".bracket-view-tab").forEach((button) => {
+    const active = button.dataset.bracketView === state.view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+}
+
+function renderGroups() {
+  const positionLabels = ["1st", "2nd", "3rd", "4th"];
+  groupGrid.innerHTML = Object.keys(state.groups).sort().map((group) => {
+    const ranking = state.groupRankings[group] || [...state.groups[group]];
+    const locked = Boolean(state.groupLocks[group]);
+    return `
+      <article class="group-prediction-card ${locked ? "locked" : ""}">
+        <header>
+          <h3>Group ${group}</h3>
+          ${locked ? `<span>Locked</span>` : ""}
+        </header>
+        <div class="group-ranking">
+          ${ranking.map((selected, index) => `
+            <label>
+              <span>${positionLabels[index]}</span>
+              <select data-group="${group}" data-position="${index}" ${locked ? "disabled" : ""}>
+                ${state.groups[group].map((team) => `
+                  <option value="${escapeHtml(team)}" ${team === selected ? "selected" : ""}>${escapeHtml(team)}</option>
+                `).join("")}
+              </select>
+            </label>
+          `).join("")}
+        </div>
+        <label class="third-place-choice">
+          <input type="checkbox" data-third-group="${group}"
+            ${state.thirdPlaceGroups.includes(group) ? "checked" : ""}
+            ${state.thirdPlaceLocked ? "disabled" : ""}>
+          <span>${escapeHtml(ranking[2])} advances as a best third-place team</span>
+        </label>
+      </article>
+    `;
+  }).join("");
+  document.querySelector("#thirdPlaceProgress").textContent =
+    `${state.thirdPlaceGroups.length} of 8 third-place qualifiers`;
+
+  groupGrid.querySelectorAll("select[data-group]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const group = select.dataset.group;
+      const position = Number(select.dataset.position);
+      const ranking = state.groupRankings[group];
+      const previousPosition = ranking.indexOf(select.value);
+      [ranking[position], ranking[previousPosition]] = [ranking[previousPosition], ranking[position]];
+      message.textContent = "";
+      render();
+    });
+  });
+  groupGrid.querySelectorAll("input[data-third-group]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const group = checkbox.dataset.thirdGroup;
+      const previous = [...state.thirdPlaceGroups];
+      if (checkbox.checked) {
+        if (state.thirdPlaceGroups.length >= 8) {
+          message.textContent = "Only eight third-place teams can qualify.";
+          render();
+          return;
+        }
+        state.thirdPlaceGroups.push(group);
+      } else {
+        state.thirdPlaceGroups = state.thirdPlaceGroups.filter((item) => item !== group);
+      }
+      if (!assignThirdPlaceGroups(state.thirdPlaceGroups)) {
+        state.thirdPlaceGroups = previous;
+        message.textContent = "That combination cannot produce valid Round-of-32 crossings.";
+      } else {
+        message.textContent = "";
+      }
       render();
     });
   });
@@ -224,7 +322,11 @@ async function loadBracket() {
   }
   if (!response.ok) throw new Error(data.error || "Unable to load your bracket.");
   state.groups = data.groups || {};
+  state.groupLocks = data.groupLocks || {};
+  state.thirdPlaceLocked = Boolean(data.thirdPlaceLocked);
   state.matches = data.matches || [];
+  state.groupRankings = data.picks?.groupRankings || {};
+  state.thirdPlaceGroups = data.picks?.thirdPlaceGroups || [];
   state.entrants = data.picks?.entrants || {};
   state.winners = data.picks?.winners || {};
   state.updatedAt = data.picks?.updatedAt || null;
@@ -242,10 +344,17 @@ async function saveBracket() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ entrants: state.entrants, winners: state.winners })
+      body: JSON.stringify({
+        groupRankings: state.groupRankings,
+        thirdPlaceGroups: state.thirdPlaceGroups,
+        winners: state.winners
+      })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Unable to save your bracket.");
+    state.groupRankings = data.picks.groupRankings;
+    state.thirdPlaceGroups = data.picks.thirdPlaceGroups;
+    state.entrants = data.picks.entrants;
     state.updatedAt = data.picks.updatedAt;
     message.textContent = data.message;
     render();
@@ -257,6 +366,12 @@ async function saveBracket() {
 }
 
 saveButton.addEventListener("click", saveBracket);
+document.querySelectorAll(".bracket-view-tab").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.view = button.dataset.bracketView;
+    renderView();
+  });
+});
 loadBracket().catch((error) => {
   message.textContent = error.message;
 });

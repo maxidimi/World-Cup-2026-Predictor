@@ -34,14 +34,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          load: true
+          provenance: false
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:${{ github.sha }}
+
+      - name: Push image
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}
+          SHA_TAG: ${{ github.sha }}
+        run: |
+          push_with_retry() {
+            local tag="$1"
+            local attempt
+            for attempt in 1 2 3; do
+              if docker push "$tag"; then
+                return 0
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                echo "Push attempt $attempt failed for $tag. Retrying in $((attempt * 10)) seconds..."
+                sleep $((attempt * 10))
+              fi
+            done
+            return 1
+          }
+
+          push_with_retry "$IMAGE:$SHA_TAG"
+          push_with_retry "$IMAGE:latest"
 
   deploy:
     needs: build

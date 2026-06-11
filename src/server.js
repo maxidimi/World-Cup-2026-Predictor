@@ -1077,8 +1077,8 @@ async function buildAdminOverview() {
   const teams = await db.collection("teams").find({}).sort({ createdAt: -1 }).toArray();
   const passwordResets = await db.collection("passwordResets")
     .find({ usedAt: { $exists: false }, expiresAt: { $gt: new Date() } })
-    .sort({ createdAt: -1 })
     .toArray();
+  passwordResets.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   const userMap = new Map(users.map((user) => [String(user._id), publicUser(user)]));
   const matchMap = new Map(matches.map((match) => [match.id, match]));
   const resultMap = new Map(results.map((result) => [result.matchId, result]));

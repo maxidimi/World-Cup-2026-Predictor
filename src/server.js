@@ -30,6 +30,8 @@ const publicFiles = new Set([
   "app.js",
   "leaderboard.html",
   "leaderboard.js",
+  "bracket.html",
+  "bracket.js",
   "profile.html",
   "profile.js",
   "teams.html",
@@ -108,6 +110,7 @@ function getDb() {
       await db.collection("teams").createIndex({ inviteCode: 1 }, { unique: true });
       await db.collection("teams").createIndex({ members: 1 });
       await db.collection("teams").createIndex({ createdAt: -1 });
+      await db.collection("brackets").createIndex({ userId: 1 }, { unique: true });
       return db;
     }).catch(async (error) => {
       dbPromise = undefined;
@@ -579,6 +582,156 @@ function outcome(home, away) {
 function predictionPoints(prediction, result) {
   if (prediction.home === result.home && prediction.away === result.away) return 3;
   return outcome(prediction.home, prediction.away) === outcome(result.home, result.away) ? 1 : 0;
+}
+
+const bracketMatches = [
+  { id: "M73", round: "Round of 32", home: { type: "group", group: "A", position: 2 }, away: { type: "group", group: "B", position: 2 } },
+  { id: "M74", round: "Round of 32", home: { type: "group", group: "E", position: 1 }, away: { type: "third", groups: ["A", "B", "C", "D", "F"] } },
+  { id: "M75", round: "Round of 32", home: { type: "group", group: "F", position: 1 }, away: { type: "group", group: "C", position: 2 } },
+  { id: "M76", round: "Round of 32", home: { type: "group", group: "C", position: 1 }, away: { type: "group", group: "F", position: 2 } },
+  { id: "M77", round: "Round of 32", home: { type: "group", group: "I", position: 1 }, away: { type: "third", groups: ["C", "D", "F", "G", "H"] } },
+  { id: "M78", round: "Round of 32", home: { type: "group", group: "E", position: 2 }, away: { type: "group", group: "I", position: 2 } },
+  { id: "M79", round: "Round of 32", home: { type: "group", group: "A", position: 1 }, away: { type: "third", groups: ["C", "E", "F", "H", "I"] } },
+  { id: "M80", round: "Round of 32", home: { type: "group", group: "L", position: 1 }, away: { type: "third", groups: ["E", "H", "I", "J", "K"] } },
+  { id: "M81", round: "Round of 32", home: { type: "group", group: "D", position: 1 }, away: { type: "third", groups: ["B", "E", "F", "I", "J"] } },
+  { id: "M82", round: "Round of 32", home: { type: "group", group: "G", position: 1 }, away: { type: "third", groups: ["A", "E", "H", "I", "J"] } },
+  { id: "M83", round: "Round of 32", home: { type: "group", group: "K", position: 2 }, away: { type: "group", group: "L", position: 2 } },
+  { id: "M84", round: "Round of 32", home: { type: "group", group: "H", position: 1 }, away: { type: "group", group: "J", position: 2 } },
+  { id: "M85", round: "Round of 32", home: { type: "group", group: "B", position: 1 }, away: { type: "third", groups: ["E", "F", "G", "I", "J"] } },
+  { id: "M86", round: "Round of 32", home: { type: "group", group: "J", position: 1 }, away: { type: "group", group: "H", position: 2 } },
+  { id: "M87", round: "Round of 32", home: { type: "group", group: "K", position: 1 }, away: { type: "third", groups: ["D", "E", "I", "J", "L"] } },
+  { id: "M88", round: "Round of 32", home: { type: "group", group: "D", position: 2 }, away: { type: "group", group: "G", position: 2 } },
+  { id: "M89", round: "Round of 16", home: { type: "winner", matchId: "M74" }, away: { type: "winner", matchId: "M77" } },
+  { id: "M90", round: "Round of 16", home: { type: "winner", matchId: "M73" }, away: { type: "winner", matchId: "M75" } },
+  { id: "M91", round: "Round of 16", home: { type: "winner", matchId: "M76" }, away: { type: "winner", matchId: "M78" } },
+  { id: "M92", round: "Round of 16", home: { type: "winner", matchId: "M79" }, away: { type: "winner", matchId: "M80" } },
+  { id: "M93", round: "Round of 16", home: { type: "winner", matchId: "M83" }, away: { type: "winner", matchId: "M84" } },
+  { id: "M94", round: "Round of 16", home: { type: "winner", matchId: "M81" }, away: { type: "winner", matchId: "M82" } },
+  { id: "M95", round: "Round of 16", home: { type: "winner", matchId: "M86" }, away: { type: "winner", matchId: "M88" } },
+  { id: "M96", round: "Round of 16", home: { type: "winner", matchId: "M85" }, away: { type: "winner", matchId: "M87" } },
+  { id: "M97", round: "Quarter-finals", home: { type: "winner", matchId: "M89" }, away: { type: "winner", matchId: "M90" } },
+  { id: "M98", round: "Quarter-finals", home: { type: "winner", matchId: "M93" }, away: { type: "winner", matchId: "M94" } },
+  { id: "M99", round: "Quarter-finals", home: { type: "winner", matchId: "M91" }, away: { type: "winner", matchId: "M92" } },
+  { id: "M100", round: "Quarter-finals", home: { type: "winner", matchId: "M95" }, away: { type: "winner", matchId: "M96" } },
+  { id: "M101", round: "Semi-finals", home: { type: "winner", matchId: "M97" }, away: { type: "winner", matchId: "M98" } },
+  { id: "M102", round: "Semi-finals", home: { type: "winner", matchId: "M99" }, away: { type: "winner", matchId: "M100" } },
+  { id: "M103", round: "Third place", home: { type: "loser", matchId: "M101" }, away: { type: "loser", matchId: "M102" } },
+  { id: "M104", round: "Final", home: { type: "winner", matchId: "M101" }, away: { type: "winner", matchId: "M102" } }
+];
+const bracketMatchMap = new Map(bracketMatches.map((match) => [match.id, match]));
+
+function groupTeamsFromMatches(matches) {
+  const groups = {};
+  matches.forEach((match) => {
+    const group = String(match.phase || "").match(/^GROUP[_ ]([A-L])$/i)?.[1]?.toUpperCase();
+    if (!group) return;
+    groups[group] ||= [];
+    [match.home, match.away].forEach((team) => {
+      if (!team || /^(TBD|Winner|Runner-up|Loser|3rd)\b/i.test(team)) return;
+      if (!groups[group].includes(team)) groups[group].push(team);
+    });
+  });
+  Object.values(groups).forEach((teams) => teams.sort((left, right) => left.localeCompare(right)));
+  return groups;
+}
+
+function bracketSourceLabel(source) {
+  if (source.type === "group") {
+    return `${source.position === 1 ? "Winner" : "Runner-up"} Group ${source.group}`;
+  }
+  if (source.type === "third") return `Third place Group ${source.groups.join("/")}`;
+  return `${source.type === "loser" ? "Loser" : "Winner"} ${source.matchId}`;
+}
+
+function resolveBracketSource(source, entrants, winners) {
+  if (source.type === "group" || source.type === "third") return entrants[`${source.matchId || ""}`] || "";
+  const previous = bracketMatchMap.get(source.matchId);
+  const winner = winners[source.matchId] || "";
+  if (source.type === "winner") return winner;
+  if (!previous || !winner) return "";
+  const participants = resolveBracketParticipants(previous, entrants, winners);
+  return participants.find((team) => team && team !== winner) || "";
+}
+
+function resolveBracketParticipants(match, entrants, winners) {
+  if (match.round === "Round of 32") {
+    return [entrants[`${match.id}.home`] || "", entrants[`${match.id}.away`] || ""];
+  }
+  return [
+    resolveBracketSource(match.home, entrants, winners),
+    resolveBracketSource(match.away, entrants, winners)
+  ];
+}
+
+function sanitizeBracketMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, team]) => [
+    String(key),
+    String(team || "").trim().slice(0, 80)
+  ]).filter(([, team]) => team));
+}
+
+function validateBracketPicks(entrants, winners, groups) {
+  const allowedEntrantKeys = new Set();
+  const selectedTeams = new Set();
+  const selectedThirdGroups = new Set();
+  for (const match of bracketMatches.filter((item) => item.round === "Round of 32")) {
+    for (const [side, source] of [["home", match.home], ["away", match.away]]) {
+      const key = `${match.id}.${side}`;
+      allowedEntrantKeys.add(key);
+      const team = entrants[key];
+      if (!team) continue;
+      const eligibleGroups = source.type === "group" ? [source.group] : source.groups;
+      const eligible = eligibleGroups.some((group) => (groups[group] || []).includes(team));
+      if (!eligible) throw new Error(`${team} is not eligible for ${bracketSourceLabel(source)}.`);
+      if (selectedTeams.has(team)) throw new Error(`${team} cannot occupy more than one bracket position.`);
+      if (source.type === "third") {
+        const selectedGroup = eligibleGroups.find((group) => (groups[group] || []).includes(team));
+        if (selectedThirdGroups.has(selectedGroup)) {
+          throw new Error(`Only one third-place team can qualify from Group ${selectedGroup}.`);
+        }
+        selectedThirdGroups.add(selectedGroup);
+      }
+      selectedTeams.add(team);
+    }
+  }
+  if (Object.keys(entrants).some((key) => !allowedEntrantKeys.has(key))) {
+    throw new Error("The bracket contains an unknown qualification position.");
+  }
+  const allowedWinnerKeys = new Set(bracketMatches.map((match) => match.id));
+  if (Object.keys(winners).some((key) => !allowedWinnerKeys.has(key))) {
+    throw new Error("The bracket contains an unknown match.");
+  }
+  for (const match of bracketMatches) {
+    const winner = winners[match.id];
+    if (!winner) continue;
+    const participants = resolveBracketParticipants(match, entrants, winners);
+    if (participants.some((team) => !team) || !participants.includes(winner)) {
+      throw new Error(`${winner} cannot advance from ${match.id}. Complete its valid crossing first.`);
+    }
+  }
+}
+
+async function bracketPayload(userId) {
+  const db = await getDb();
+  const matches = await getMatches();
+  const bracket = await db.collection("brackets").findOne({ userId });
+  const kickoffMap = new Map(matches.map((match) => [match.id, match.kickoffUtc]));
+  return {
+    groups: groupTeamsFromMatches(matches),
+    matches: bracketMatches.map((match) => ({
+      ...match,
+      home: { ...match.home, label: bracketSourceLabel(match.home) },
+      away: { ...match.away, label: bracketSourceLabel(match.away) },
+      kickoffUtc: kickoffMap.get(match.id) || null,
+      locked: kickoffMap.has(match.id) && Date.now() >= new Date(kickoffMap.get(match.id)).getTime()
+    })),
+    picks: {
+      entrants: bracket?.entrants || {},
+      winners: bracket?.winners || {},
+      updatedAt: bracket?.updatedAt || null
+    }
+  };
 }
 
 function normalizeTeamName(value) {
@@ -1394,6 +1547,71 @@ async function handleApi(request, response, url) {
         user: publicUser(user),
         summary,
         predictions: predictionHistory
+      });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/bracket") {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to build your World Cup bracket." });
+        return;
+      }
+      sendJson(response, 200, await bracketPayload(user._id));
+      return;
+    }
+
+    if (request.method === "PUT" && url.pathname === "/api/bracket") {
+      const user = await getAuthenticatedUser(request);
+      if (!user) {
+        sendJson(response, 401, { error: "Log in to save your World Cup bracket." });
+        return;
+      }
+      const body = await readBody(request);
+      const entrants = sanitizeBracketMap(body.entrants);
+      const winners = sanitizeBracketMap(body.winners);
+      const db = await getDb();
+      const matches = await getMatches();
+      const groups = groupTeamsFromMatches(matches);
+      try {
+        validateBracketPicks(entrants, winners, groups);
+      } catch (error) {
+        sendJson(response, 400, { error: error.message });
+        return;
+      }
+      const existing = await db.collection("brackets").findOne({ userId: user._id });
+      const existingEntrants = existing?.entrants || {};
+      const existingWinners = existing?.winners || {};
+      const kickoffMap = new Map(matches.map((match) => [match.id, match.kickoffUtc]));
+      for (const match of bracketMatches) {
+        const kickoffUtc = kickoffMap.get(match.id);
+        if (!kickoffUtc || Date.now() < new Date(kickoffUtc).getTime()) continue;
+        if (match.round === "Round of 32") {
+          for (const side of ["home", "away"]) {
+            const key = `${match.id}.${side}`;
+            if ((entrants[key] || "") !== (existingEntrants[key] || "")) {
+              sendJson(response, 403, { error: `${match.id} is locked because it has started.` });
+              return;
+            }
+          }
+        }
+        if ((winners[match.id] || "") !== (existingWinners[match.id] || "")) {
+          sendJson(response, 403, { error: `${match.id} is locked because it has started.` });
+          return;
+        }
+      }
+      const now = new Date();
+      await db.collection("brackets").updateOne(
+        { userId: user._id },
+        {
+          $set: { userId: user._id, entrants, winners, updatedAt: now },
+          $setOnInsert: { createdAt: now }
+        },
+        { upsert: true }
+      );
+      sendJson(response, 200, {
+        message: "Bracket saved.",
+        picks: { entrants, winners, updatedAt: now }
       });
       return;
     }

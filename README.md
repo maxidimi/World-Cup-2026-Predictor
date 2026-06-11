@@ -189,6 +189,7 @@ POST /api/admin/sync-results
 - `predictions`: user score predictions.
 - `results`: official or admin-entered match scores.
 - `matches`: stored fixtures shown by the app.
+- `brackets`: each user's knockout-stage qualification and winner selections.
 - `passwordResets`: local password reset tokens.
 - `teams`: private prediction groups, invite codes, owners, and members.
 

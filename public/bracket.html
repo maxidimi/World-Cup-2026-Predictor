@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>World Cup Bracket - World Cup Predictor</title>
+    <script src="theme.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="hero bracket-header">
+      <nav class="topbar" aria-label="Primary">
+        <a class="brand brand-link" href="index.html">
+          <span class="brand-mark" aria-hidden="true">WC</span>
+          <span>World Cup Predictor</span>
+        </a>
+        <div class="topbar-right">
+          <div class="page-nav" aria-label="Pages">
+            <a class="nav-link" href="index.html">Predictions</a>
+            <a class="nav-link active" href="bracket.html" aria-current="page">Bracket</a>
+            <a class="nav-link" href="leaderboard.html">Leaderboard</a>
+            <a class="nav-link" href="teams.html">My teams</a>
+          </div>
+          <div class="session header-session">
+            <a class="ghost-link header-profile hidden" href="profile.html">Profile</a>
+            <a class="ghost-link header-login hidden" href="login.html">Log in</a>
+            <button class="ghost header-logout hidden" type="button">Log out</button>
+          </div>
+        </div>
+      </nav>
+      <section class="hero-content">
+        <p class="eyebrow">World Cup 2026</p>
+        <h1>Knockout bracket</h1>
+        <p class="lede">Choose the qualifiers, then advance teams through their real tournament path.</p>
+      </section>
+    </header>
+
+    <main class="bracket-main">
+      <section class="bracket-toolbar" aria-label="Bracket controls">
+        <div>
+          <strong id="bracketProgress">0 of 32 winners selected</strong>
+          <span id="bracketSavedAt">Not saved yet</span>
+        </div>
+        <button id="saveBracketBtn" type="button">Save bracket</button>
+      </section>
+      <p id="bracketMessage" class="form-message" role="status">Loading bracket...</p>
+      <section id="championPanel" class="champion-panel hidden" aria-live="polite">
+        <span>Predicted champion</span>
+        <strong id="championName"></strong>
+      </section>
+      <div class="bracket-scroll" aria-label="World Cup knockout bracket">
+        <div id="bracketBoard" class="bracket-board"></div>
+      </div>
+    </main>
+
+    <script src="nav-session.js"></script>
+    <script src="bracket.js"></script>
+  </body>
+</html>

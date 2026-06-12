@@ -4,6 +4,9 @@ A World Cup prediction web app with MongoDB-backed users, login, admin tools, ma
 
 For a complete public Azure deployment procedure, see [Azure deployment](docs/AZURE_DEPLOYMENT.md).
 
+For the current security model, secret locations, hardening roadmap, costs, and
+implementation checklist, see [Security hardening](docs/SECURITY_HARDENING.md).
+
 ## Features
 
 - Register and log in with local MongoDB authentication.

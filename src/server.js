@@ -694,6 +694,14 @@ function defaultGroupRankings(groups) {
   return Object.fromEntries(Object.entries(groups).map(([group, teams]) => [group, [...teams]]));
 }
 
+async function getPredictionLocks(db) {
+  const settings = await db.collection("settings").findOne({ _id: "predictionLocks" });
+  return {
+    groupStageLocked: Boolean(settings?.groupStageLocked),
+    updatedAt: settings?.updatedAt || null
+  };
+}
+
 function validateGroupPredictions(rankings, thirdPlaceGroups, groups) {
   for (const [group, teams] of Object.entries(groups)) {
     const ranking = rankings[group];
@@ -812,26 +820,16 @@ async function bracketPayload(userId) {
   const db = await getDb();
   const matches = await getMatches();
   const bracket = await db.collection("brackets").findOne({ userId });
+  const predictionLocks = await getPredictionLocks(db);
   const kickoffMap = new Map(matches.map((match) => [match.id, match.kickoffUtc]));
   const groups = groupTeamsFromMatches(matches);
   const groupRankings = bracket?.groupRankings || defaultGroupRankings(groups);
   const thirdPlaceGroups = bracket?.thirdPlaceGroups || [];
   const entrants = deriveBracketEntrants(groupRankings, thirdPlaceGroups);
-  const knockoutKickoffs = bracketMatches
-    .map((match) => kickoffMap.get(match.id))
-    .filter(Boolean)
-    .map((kickoff) => new Date(kickoff).getTime());
-  const groupKickoffs = {};
-  matches.forEach((match) => {
-    const group = String(match.phase || "").match(/^GROUP[_ ]([A-L])$/i)?.[1]?.toUpperCase();
-    if (!group || !match.kickoffUtc) return;
-    const kickoff = new Date(match.kickoffUtc).getTime();
-    if (!groupKickoffs[group] || kickoff < groupKickoffs[group]) groupKickoffs[group] = kickoff;
-  });
   return {
     groups,
-    groupLocks: Object.fromEntries(Object.entries(groupKickoffs).map(([group, kickoff]) => [group, Date.now() >= kickoff])),
-    thirdPlaceLocked: knockoutKickoffs.length > 0 && Date.now() >= Math.min(...knockoutKickoffs),
+    groupLocks: Object.fromEntries(Object.keys(groups).map((group) => [group, predictionLocks.groupStageLocked])),
+    thirdPlaceLocked: predictionLocks.groupStageLocked,
     matches: bracketMatches.map((match) => ({
       ...match,
       home: { ...match.home, label: bracketSourceLabel(match.home) },
@@ -1237,6 +1235,7 @@ async function buildAdminOverview() {
   const passwordResets = await db.collection("passwordResets")
     .find({ usedAt: { $exists: false }, expiresAt: { $gt: new Date() } })
     .toArray();
+  const predictionLocks = await getPredictionLocks(db);
   passwordResets.sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   const userMap = new Map(users.map((user) => [String(user._id), publicUser(user)]));
   const matchMap = new Map(matches.map((match) => [match.id, match]));
@@ -1346,6 +1345,9 @@ async function buildAdminOverview() {
         expiresAt: reset.expiresAt
       };
     }),
+    settings: {
+      predictionLocks
+    },
     stats,
     totals: {
       users: users.length,
@@ -1734,27 +1736,12 @@ async function handleApi(request, response, url) {
       const existingEntrants = deriveBracketEntrants(existingRankings, existingThirdPlaceGroups);
       const existingWinners = existing?.winners || {};
       const kickoffMap = new Map(matches.map((match) => [match.id, match.kickoffUtc]));
-      const groupKickoffs = {};
-      matches.forEach((match) => {
-        const group = String(match.phase || "").match(/^GROUP[_ ]([A-L])$/i)?.[1]?.toUpperCase();
-        if (!group || !match.kickoffUtc) return;
-        const kickoff = new Date(match.kickoffUtc).getTime();
-        if (!groupKickoffs[group] || kickoff < groupKickoffs[group]) groupKickoffs[group] = kickoff;
-      });
-      for (const group of Object.keys(groups)) {
-        if (!groupKickoffs[group] || Date.now() < groupKickoffs[group]) continue;
-        if (JSON.stringify(groupRankings[group]) !== JSON.stringify(existingRankings[group])) {
-          sendJson(response, 403, { error: `Group ${group} is locked because its first match has started.` });
-          return;
-        }
-      }
-      const firstKnockoutKickoff = Math.min(...bracketMatches
-        .map((match) => kickoffMap.get(match.id))
-        .filter(Boolean)
-        .map((kickoff) => new Date(kickoff).getTime()));
-      if (Number.isFinite(firstKnockoutKickoff) && Date.now() >= firstKnockoutKickoff &&
-          JSON.stringify([...thirdPlaceGroups].sort()) !== JSON.stringify([...existingThirdPlaceGroups].sort())) {
-        sendJson(response, 403, { error: "Third-place qualifiers are locked because the knockout stage has started." });
+      const predictionLocks = await getPredictionLocks(db);
+      const groupRankingsChanged = JSON.stringify(groupRankings) !== JSON.stringify(existingRankings);
+      const thirdPlaceGroupsChanged =
+        JSON.stringify([...thirdPlaceGroups].sort()) !== JSON.stringify([...existingThirdPlaceGroups].sort());
+      if (predictionLocks.groupStageLocked && (groupRankingsChanged || thirdPlaceGroupsChanged)) {
+        sendJson(response, 403, { error: "Group-stage predictions are locked by the administrator." });
         return;
       }
       for (const match of bracketMatches) {
@@ -1852,6 +1839,35 @@ async function handleApi(request, response, url) {
     if (request.method === "GET" && url.pathname === "/api/admin/metrics") {
       if (!await requireAdmin(request, response)) return;
       sendJson(response, 200, await buildAdminMetrics());
+      return;
+    }
+
+    if (request.method === "PUT" && url.pathname === "/api/admin/settings/group-stage-lock") {
+      if (!await requireAdmin(request, response)) return;
+      const body = await readBody(request);
+      if (typeof body.locked !== "boolean") {
+        sendJson(response, 400, { error: "The locked value must be true or false." });
+        return;
+      }
+      const db = await getDb();
+      const updatedAt = new Date();
+      await db.collection("settings").updateOne(
+        { _id: "predictionLocks" },
+        {
+          $set: {
+            groupStageLocked: body.locked,
+            updatedAt
+          }
+        },
+        { upsert: true }
+      );
+      sendJson(response, 200, {
+        message: body.locked ? "Group-stage predictions locked." : "Group-stage predictions unlocked.",
+        predictionLocks: {
+          groupStageLocked: body.locked,
+          updatedAt
+        }
+      });
       return;
     }
 

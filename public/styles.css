@@ -616,6 +616,70 @@ input.invalid {
   margin-top: 0;
 }
 
+.admin-lock-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.admin-lock-control > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-lock-control h2,
+.admin-lock-control p {
+  margin: 0;
+}
+
+.admin-lock-control h2 {
+  font-size: 16px;
+}
+
+.admin-lock-control p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.lock-status {
+  min-width: 82px;
+  padding: 6px 9px;
+  border: 1px solid #afe4d0;
+  border-radius: 6px;
+  background: #e9f8f2;
+  color: var(--green-strong);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.lock-status.locked {
+  border-color: #ffc6cc;
+  background: #fff0f1;
+  color: var(--red-strong);
+}
+
+[data-theme="dark"] .lock-status {
+  border-color: #286b58;
+  background: #153c32;
+  color: #65d6ad;
+}
+
+[data-theme="dark"] .lock-status.locked {
+  border-color: #7f3540;
+  background: #3b2024;
+  color: #ff8b98;
+}
+
 .admin-controls {
   grid-template-columns: 1fr;
 }
@@ -2183,6 +2247,20 @@ body[data-auth-mode="register"] .eyebrow {
 
   .profile-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-lock-control,
+  .admin-lock-control > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-lock-control button {
+    width: 100%;
+  }
+
+  .lock-status {
+    align-self: flex-start;
   }
 
   .leaderboard-search {

@@ -149,6 +149,17 @@ function renderSummary() {
   $("#votedMatchCount").textContent = adminState.overview.totals.matchesWithVotes;
 }
 
+function renderPredictionLocks() {
+  const locked = Boolean(adminState.overview.settings?.predictionLocks?.groupStageLocked);
+  const status = $("#groupStageLockStatus");
+  const button = $("#toggleGroupStageLock");
+  status.textContent = locked ? "Locked" : "Unlocked";
+  status.classList.toggle("locked", locked);
+  button.textContent = locked ? "Unlock predictions" : "Lock predictions";
+  button.classList.toggle("ghost", locked);
+  button.dataset.locked = String(locked);
+}
+
 function renderFilters() {
   const select = $("#adminPhase");
   if (select.options.length > 1) return;
@@ -425,6 +436,7 @@ function renderMetrics() {
 function render() {
   if (!adminState.overview) return;
   renderSummary();
+  renderPredictionLocks();
   renderFilters();
   renderUsers();
   renderTeams();
@@ -562,6 +574,25 @@ async function handleSyncResults() {
   }
 }
 
+async function handleToggleGroupStageLock() {
+  const button = $("#toggleGroupStageLock");
+  const locked = button.dataset.locked === "true";
+  try {
+    button.disabled = true;
+    const data = await api("/api/admin/settings/group-stage-lock", {
+      method: "PUT",
+      body: JSON.stringify({ locked: !locked })
+    });
+    adminState.overview.settings.predictionLocks = data.predictionLocks;
+    $("#adminMessage").textContent = data.message;
+    renderPredictionLocks();
+  } catch (error) {
+    $("#adminMessage").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function handleCopyResetUrl(event) {
   const button = event.currentTarget;
   try {
@@ -632,6 +663,7 @@ function bindEvents() {
     $("#userDetailPanel").classList.add("hidden");
   });
   $("#syncResultsBtn").addEventListener("click", handleSyncResults);
+  $("#toggleGroupStageLock").addEventListener("click", handleToggleGroupStageLock);
   $("#refreshMetricsBtn").addEventListener("click", () => {
     loadMetrics().catch((error) => {
       $("#adminMessage").textContent = error.message;

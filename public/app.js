@@ -17,6 +17,7 @@ const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)]
 const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const kickoffDateFormatter = new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 const kickoffTimeFormatter = new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" });
+const matchVisibilityAfterKickoffMs = 24 * 60 * 60 * 1000;
 const tournamentStages = [
   { key: "group-stage", label: "Group stage" },
   { key: "round-of-32", label: "Round of 32" },
@@ -96,17 +97,23 @@ function hasMatchStarted(match) {
   return Date.now() >= new Date(match.kickoffUtc).getTime();
 }
 
+function isMatchVisible(match) {
+  const kickoff = new Date(match.kickoffUtc).getTime();
+  return !Number.isFinite(kickoff) || Date.now() - kickoff <= matchVisibilityAfterKickoffMs;
+}
+
 function fillSelects() {
   const phaseSelect = $("#phaseFilter");
   const teamSelect = $("#teamFilter");
+  const visibleMatches = matches.filter(isMatchVisible);
   phaseSelect.replaceChildren(new Option("All stages", "all"));
   teamSelect.replaceChildren(new Option("All teams", "all"));
-  const availableStages = new Set(matches.map((match) => stageKey(match.phase)));
+  const availableStages = new Set(visibleMatches.map((match) => stageKey(match.phase)));
   tournamentStages.forEach((stage) => {
     if (availableStages.has(stage.key)) phaseSelect.append(new Option(stage.label, stage.key));
   });
 
-  const realTeams = [...new Set(matches.flatMap((match) => [match.home, match.away]))]
+  const realTeams = [...new Set(visibleMatches.flatMap((match) => [match.home, match.away]))]
     .filter((team) => !/^(Winner|Runner-up|Loser|3rd)/.test(team))
     .sort();
   realTeams.forEach((team) => teamSelect.append(new Option(team, team)));
@@ -115,6 +122,7 @@ function fillSelects() {
 function filteredMatches() {
   const query = state.search.trim().toLowerCase();
   return matches.filter((match) => {
+    if (!isMatchVisible(match)) return false;
     const phaseOk = state.phase === "all" || stageKey(match.phase) === state.phase;
     const teamOk = state.team === "all" || match.home === state.team || match.away === state.team;
     const queryOk = !query || [
